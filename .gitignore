@@ -6,6 +6,7 @@ profile/context.md
 profile/answers.yaml
 context/
 out/
+*.zip
 
 # === Banco de dados local ===
 autoapply.db
