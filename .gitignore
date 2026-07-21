@@ -1,0 +1,39 @@
+# === Dados pessoais / segredos (NUNCA commitar) ===
+.env
+config.yaml
+profile/resume.json
+profile/context.md
+profile/answers.yaml
+context/
+out/
+
+# === Banco de dados local ===
+autoapply.db
+autoapply.db-shm
+autoapply.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# === Lixo de sistema / editor ===
+.fuse_hidden*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# === Scratch ===
+_modelcheck.py
+_modelcheck_out.txt

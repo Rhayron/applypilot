@@ -1,0 +1,47 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jsonresume/resume-schema/master/schema.json",
+  "basics": {
+    "name": "Seu Nome",
+    "label": "Software Engineer",
+    "email": "seu.email@exemplo.com",
+    "phone": "+55 (00) 00000-0000",
+    "url": "",
+    "location": { "city": "", "region": "", "countryCode": "BR" },
+    "profiles": [
+      { "network": "LinkedIn", "url": "https://linkedin.com/in/SEU-PERFIL" },
+      { "network": "GitHub", "url": "https://github.com/SEU-USER" }
+    ],
+    "summary": "PREENCHA: resumo profissional de 2-3 frases."
+  },
+  "work": [
+    {
+      "name": "Empresa Exemplo",
+      "position": "Desenvolvedor Backend",
+      "startDate": "2023-01",
+      "endDate": "",
+      "summary": "PREENCHA: o que a empresa faz e seu papel.",
+      "highlights": [
+        "PREENCHA: conquista mensurável 1 (ex.: reduziu latência da API em 40%)",
+        "PREENCHA: conquista mensurável 2"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "institution": "Universidade Exemplo",
+      "area": "Ciência da Computação",
+      "studyType": "Bacharelado",
+      "startDate": "2019-01",
+      "endDate": "2023-12"
+    }
+  ],
+  "skills": [
+    { "name": "Backend", "keywords": ["Python", "Node.js", "PostgreSQL"] },
+    { "name": "Cloud", "keywords": ["AWS", "Docker", "CI/CD"] }
+  ],
+  "languages": [
+    { "language": "Português", "fluency": "Nativo" },
+    { "language": "Inglês", "fluency": "Avançado" }
+  ],
+  "projects": []
+}

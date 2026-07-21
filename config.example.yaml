@@ -1,0 +1,71 @@
+# Copie para config.yaml e ajuste.
+
+# Modo de operação:
+#   auto   -> aplica sozinho quando score >= apply_threshold; Telegram só em falha
+#   review -> envia vaga + CV adaptado no Telegram e espera aprovação antes de aplicar
+#   alert  -> nunca aplica; só envia vaga + CV adaptado no Telegram
+mode: review
+
+llm:
+  # Qualquer modelo suportado pelo litellm. Exemplos:
+  #   anthropic/claude-sonnet-4-5      openai/gpt-4o
+  #   gemini/gemini-2.5-pro            xai/grok-4
+  #   openrouter/meta-llama/llama-3.3-70b-instruct
+  model: anthropic/claude-sonnet-4-5
+  # Modelo barato para triagem em massa (scoring). Opcional; default = model.
+  cheap_model: anthropic/claude-haiku-4-5
+  temperature: 0.3
+
+profile:
+  resume_path: profile/resume.json        # JSON Resume com seus dados reais
+  context_path: profile/context.md        # quem você é, preferências, narrativa
+  answers_path: profile/answers.yaml      # banco de respostas p/ perguntas de screening
+
+search:
+  interval_minutes: 180                   # busca a cada 3h
+  titles: ["Software Engineer", "Backend Developer", "Desenvolvedor Backend"]
+  keywords: ["python", "typescript", "aws"]
+  locations: ["Remote", "Brazil", "São Paulo"]
+  remote_only: true
+  max_age_days: 7                         # ignora vagas mais antigas que isso
+
+matching:
+  apply_threshold: 75                     # score mínimo para aplicar/notificar
+  alert_threshold: 60                     # entre alert e apply -> só alerta
+
+limits:
+  max_applications_per_day: 20
+  min_seconds_between_applications: 300
+
+sources:
+  greenhouse:
+    enabled: true
+    # slugs dos boards que você quer monitorar (boards.greenhouse.io/<slug>)
+    boards: ["stripe", "cloudflare", "nubank"]
+  lever:
+    enabled: true
+    companies: ["spotify", "wealthsimple"]
+  ashby:
+    enabled: true
+    companies: ["ramp", "linear"]
+  gupy:
+    enabled: true
+    # subdomínios <empresa>.gupy.io
+    companies: ["itau", "stone"]
+  linkedin:
+    enabled: true
+    # ATENÇÃO: LinkedIn proíbe scraping/automação no ToS. Este conector usa apenas
+    # a busca pública (sem login) e opera SEMPRE em modo alerta — nunca aplica.
+    queries: ["backend developer remote brazil"]
+  rss:
+    enabled: true
+    feeds:
+      - "https://weworkremotely.com/categories/remote-programming-jobs.rss"
+      - "https://remoteok.com/remote-python-jobs.rss"
+
+telegram:
+  enabled: true
+
+output:
+  dir: out                                # PDFs/HTMLs gerados
+  db_path: autoapply.db

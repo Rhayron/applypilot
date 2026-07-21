@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>{{ r.basics.name }} — Currículo</title>
+<style>
+  /* ATS-friendly: 1 coluna, sem tabelas, fontes padrão */
+  @page { size: A4; margin: 1.6cm; }
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10.5pt; color: #1a1a1a;
+         line-height: 1.45; max-width: 19cm; margin: 0 auto; }
+  h1 { font-size: 19pt; margin: 0 0 2px; }
+  h2 { font-size: 11.5pt; text-transform: uppercase; letter-spacing: .06em;
+       border-bottom: 1.5px solid #1a1a1a; padding-bottom: 2px; margin: 16px 0 8px; }
+  .contact { font-size: 9.5pt; color: #444; margin-bottom: 4px; }
+  .item { margin-bottom: 10px; }
+  .item-head { display: flex; justify-content: space-between; }
+  .role { font-weight: bold; }
+  .dates { color: #555; font-size: 9.5pt; }
+  ul { margin: 4px 0 0 18px; padding: 0; }
+  li { margin-bottom: 2px; }
+  .skills span { display: inline; }
+</style>
+</head>
+<body>
+  <h1>{{ r.basics.name }}</h1>
+  <div class="contact">
+    {{ r.basics.label }}{% if r.basics.email %} · {{ r.basics.email }}{% endif %}
+    {%- if r.basics.phone %} · {{ r.basics.phone }}{% endif %}
+    {%- for p in r.basics.profiles or [] %} · {{ p.url }}{% endfor %}
+  </div>
+
+  {% if r.basics.summary %}<p>{{ r.basics.summary }}</p>{% endif %}
+
+  {% if r.work %}
+  <h2>Experiência</h2>
+  {% for w in r.work %}
+  <div class="item">
+    <div class="item-head">
+      <span class="role">{{ w.position }} — {{ w.name }}</span>
+      <span class="dates">{{ w.startDate }} – {{ w.endDate or "atual" }}</span>
+    </div>
+    {% if w.summary %}<div>{{ w.summary }}</div>{% endif %}
+    {% if w.highlights %}<ul>{% for h in w.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if r.skills %}
+  <h2>Habilidades</h2>
+  <div class="skills">
+    {% for s in r.skills %}<div><strong>{{ s.name }}:</strong> {{ s.keywords | join(", ") }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  {% if r.projects %}
+  <h2>Projetos</h2>
+  {% for p in r.projects %}
+  <div class="item">
+    <span class="role">{{ p.name }}</span>{% if p.description %} — {{ p.description }}{% endif %}
+    {% if p.highlights %}<ul>{% for h in p.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if r.education %}
+  <h2>Formação</h2>
+  {% for e in r.education %}
+  <div class="item">
+    <div class="item-head">
+      <span class="role">{{ e.studyType }} em {{ e.area }} — {{ e.institution }}</span>
+      <span class="dates">{{ e.startDate }} – {{ e.endDate or "atual" }}</span>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if r.languages %}
+  <h2>Idiomas</h2>
+  <div>{% for l in r.languages %}{{ l.language }} ({{ l.fluency }}){% if not loop.last %} · {% endif %}{% endfor %}</div>
+  {% endif %}
+</body>
+</html>

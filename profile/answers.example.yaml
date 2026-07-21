@@ -1,0 +1,14 @@
+# Banco de respostas para perguntas comuns de screening.
+# O LLM usa isto como fonte da verdade; se não houver resposta aqui nem no
+# contexto, a aplicação vai para revisão manual (Telegram).
+
+work_authorization_us: "No, I would require sponsorship."
+work_authorization_br: "Sim, cidadão brasileiro."
+years_of_experience_python: "4"
+notice_period: "30 dias"
+salary_expectation_brl: "R$ 12.000 - 15.000 / mês"
+salary_expectation_usd: "USD 60k - 80k / year"
+willing_to_relocate: "Não"
+remote_preference: "Remoto"
+english_level: "Avançado (C1)"
+how_did_you_hear: "Job board"

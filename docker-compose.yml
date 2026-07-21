@@ -1,0 +1,7 @@
+services:
+  autoapply:
+    build: .
+    env_file: .env
+    volumes:
+      - ./:/data          # config.yaml, profile/, out/, autoapply.db
+    restart: unless-stopped
