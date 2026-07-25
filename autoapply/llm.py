@@ -14,22 +14,32 @@ class LLM:
         self.model = model
         self.temperature = temperature
 
-    def complete(self, system: str, user: str, max_tokens: int = 4096) -> str:
+    def complete(self, system: str, user: str, max_tokens: Optional[int] = None) -> str:
+        """Completa. Sem `max_tokens`, o modelo usa o orçamento cheio dele.
+
+        O teto é opcional de propósito. Os modelos Gemini 3+ gastam tokens de
+        raciocínio antes de emitir a resposta, e esse consumo sai do mesmo orçamento:
+        com um limite apertado o pensamento consome tudo e `content` volta vazio —
+        que aqui vira JSON inválido e queima as tentativas do complete_json.
+        """
         import litellm  # lazy: permite usar o resto do pacote sem litellm instalado
 
         litellm.suppress_debug_info = True
+        kwargs: dict[str, Any] = {}
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
         resp = litellm.completion(
             model=self.model,
             temperature=self.temperature,
-            max_tokens=max_tokens,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            **kwargs,
         )
         return resp.choices[0].message.content or ""
 
-    def complete_json(self, system: str, user: str, max_tokens: int = 4096,
+    def complete_json(self, system: str, user: str, max_tokens: Optional[int] = None,
                       retries: int = 2) -> Any:
         """Completa e faz parse de JSON, com retry em caso de saída malformada."""
         system = system + "\n\nResponda APENAS com JSON válido, sem markdown, sem comentários."

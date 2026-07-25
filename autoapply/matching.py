@@ -30,7 +30,7 @@ Descrição:
 {context[:20000]}
 """
     try:
-        data = llm.complete_json(SYSTEM, user, max_tokens=1024)
+        data = llm.complete_json(SYSTEM, user)
         return MatchResult(**{
             "score": int(data.get("score", 0)),
             "reasoning": data.get("reasoning", ""),

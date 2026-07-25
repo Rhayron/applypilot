@@ -57,7 +57,7 @@ Skills: {json.dumps(self.resume.get("skills", []), ensure_ascii=False)}
 Contexto:
 {self.context[:2500]}"""
         try:
-            data = self.llm.complete_json(SCREENING_SYSTEM, user, max_tokens=512)
+            data = self.llm.complete_json(SCREENING_SYSTEM, user)
             return str(data.get("answer", "")), bool(data.get("confident", False))
         except Exception:  # noqa: BLE001
             log.exception("Falha ao responder screening: %s", question)

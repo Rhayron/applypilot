@@ -43,7 +43,7 @@ Descrição:
 {context[:20000]}
 """
     # o resume completo é reemitido na resposta, então o teto precisa acomodá-lo inteiro
-    data = llm.complete_json(SYSTEM, user, max_tokens=16384)
+    data = llm.complete_json(SYSTEM, user)
     tailored = data.get("resume") or resume
     _sanity_check(resume, tailored)
     return TailoredApplication(
