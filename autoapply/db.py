@@ -8,7 +8,7 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
-from .models import ApplicationStatus, Job
+from .models import ApplicationStatus, Job, normalize
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -31,9 +31,13 @@ CREATE TABLE IF NOT EXISTS jobs (
     pdf_path TEXT,
     fail_reason TEXT,
     applied_at TEXT,
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    dedupe_key TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+-- O índice de dedupe_key fica em _migrate(), não aqui: num banco criado antes da
+-- coluna existir, este script roda primeiro e o CREATE INDEX falharia com
+-- "no such column", impedindo o Tracker de abrir.
 
 CREATE TABLE IF NOT EXISTS cycle_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,26 +70,55 @@ class Tracker:
         self._lock = threading.RLock()
         self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.conn.create_function("norm", 1, normalize)
         with self._lock:
             self.conn.executescript(SCHEMA)
             self.conn.execute("PRAGMA journal_mode=WAL")
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """Migrações in-place. O banco de produção sobrevive aos deploys, então
+        coluna nova precisa ser adicionada e preenchida, não só declarada no SCHEMA
+        (o CREATE TABLE IF NOT EXISTS não toca numa tabela que já existe)."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(jobs)")}
+        if "dedupe_key" not in cols:
+            self.conn.execute("ALTER TABLE jobs ADD COLUMN dedupe_key TEXT")
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_jobs_dedupe_key ON jobs(dedupe_key)")
+        # Preenche o que estiver faltando — tanto o backfill inicial quanto linhas
+        # gravadas por uma versão anterior do código.
+        self.conn.execute(
+            "UPDATE jobs SET dedupe_key = norm(title) || '|' || norm(company) "
+            "WHERE dedupe_key IS NULL"
+        )
+        self.conn.commit()
 
     # ---- jobs ----
     def seen(self, job: Job) -> bool:
+        """Já conhecemos esta vaga? Por ID ou por conteúdo.
+
+        O segundo critério é o que impede alerta duplicado quando o anúncio é
+        republicado com outro external_id, ou aparece em duas fontes.
+        """
         with self._lock:
-            row = self.conn.execute("SELECT 1 FROM jobs WHERE uid=?", (job.uid,)).fetchone()
+            row = self.conn.execute(
+                "SELECT 1 FROM jobs WHERE uid=? OR dedupe_key=? LIMIT 1",
+                (job.uid, job.dedupe_key),
+            ).fetchone()
         return row is not None
 
     def add_job(self, job: Job) -> None:
         with self._lock:
             self.conn.execute(
                 """INSERT OR IGNORE INTO jobs
-                   (uid, source, external_id, title, company, location, url, description, posted_at)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                   (uid, source, external_id, title, company, location, url, description,
+                    posted_at, dedupe_key)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (
                     job.uid, job.source, job.external_id, job.title, job.company,
                     job.location, job.url, job.description,
                     job.posted_at.isoformat() if job.posted_at else None,
+                    job.dedupe_key,
                 ),
             )
             self.conn.commit()

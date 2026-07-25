@@ -2,11 +2,25 @@
 from __future__ import annotations
 
 import hashlib
+import re
+import unicodedata
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
+
+
+def normalize(text: str) -> str:
+    """Minúsculas, sem acento e sem pontuação, para comparar título e empresa.
+
+    Deliberadamente não remove palavras: 'Engineer I' e 'Engineer II' são vagas
+    diferentes e precisam continuar diferentes. O alvo aqui é só a variação
+    cosmética — acento, hífen, vírgula, espaço duplo — que faz o mesmo anúncio
+    republicado parecer novo.
+    """
+    text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
 
 
 class Mode(str, Enum):
@@ -45,6 +59,17 @@ class Job(BaseModel):
     def uid(self) -> str:
         """ID estável para dedupe entre execuções."""
         return hashlib.sha256(f"{self.source}:{self.external_id}".encode()).hexdigest()[:16]
+
+    @property
+    def dedupe_key(self) -> str:
+        """Identidade por conteúdo, para pegar o que o uid não pega.
+
+        O uid é sha256(source:external_id), então a mesma vaga republicada com outro
+        ID — coisa rotineira no LinkedIn — passava como nova e gerava um segundo
+        alerta e uma segunda adaptação de currículo. Título + empresa normalizados
+        resolvem isso, e também unificam a mesma vaga anunciada em fontes diferentes.
+        """
+        return f"{normalize(self.title)}|{normalize(self.company)}"
 
     def short(self) -> str:
         return f"{self.title} @ {self.company} ({self.location or 'n/d'})"
