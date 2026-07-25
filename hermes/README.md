@@ -4,14 +4,19 @@ O autopilot não fala mais com você direto. Quem conversa é o **Hermes**, que 
 mesma VPS e ganhou o autopilot como um conjunto de ferramentas MCP.
 
 ```
-você  <--Telegram-->  Hermes (gemini-3.6-flash)
-                         |
-                         | MCP stdio: docker exec -i autocv-autoapply-1 autoapply mcp
-                         v
-                      autopilot  --litellm-->  Gemini (scoring + adaptação de CV)
-                         |
-                         +-- SQLite (autoapply.db) + out/*.pdf
+                      ┌── Hermes (gemini-3.6-flash) ── conversa, decide, comanda
+você <--Telegram--────┤        |
+   @rhayronsnbot      │        | MCP stdio: docker exec -i autocv-autoapply-1 autoapply mcp
+   (uma identidade)   │        v
+                      └── autopilot ── alerta de vaga + PDF (sendMessage/sendDocument)
+                               |
+                               +-- litellm --> Gemini (scoring + adaptação de CV)
+                               +-- SQLite (autoapply.db) + out/*.pdf
 ```
+
+Os dois escrevem pelo **mesmo bot** (`@rhayronsnbot`, id `8815061521`), então tudo
+chega numa conversa só. O autopilot avisa na hora que acha a vaga, com o CV anexado;
+o Hermes responde quando você fala.
 
 **Divisão de trabalho:** o Hermes decide e narra; o Gemini direto continua fazendo o
 trabalho pesado por vaga. Pontuar dezenas de vagas por ciclo com um agente completo
@@ -23,10 +28,14 @@ custaria muito mais e entregaria o mesmo modelo — o Hermes também roda Gemini
 |---|---|
 | `autoapply/mcp_server.py` | 11 ferramentas MCP via stdio |
 | `autoapply mcp` | sobe o servidor; é o que o Hermes executa |
-| `hermes/autopilot_watch.py` | job de cron que anuncia vagas novas no chat |
 | `~/hermes-data/config.yaml` → `mcp_servers.autopilot` | registro no Hermes |
-| `~/hermes-data/scripts/autopilot_watch.py` | o watcher instalado |
-| `~/hermes-data/autopilot_seen.json` | uids já anunciados (evita repetir) |
+| `.env` do autopilot → `TELEGRAM_BOT_TOKEN` | token do bot do **Hermes** |
+| `hermes/autopilot_watch.py` | watcher de reserva, hoje **não instalado** |
+
+O watcher existia para anunciar a fila a cada 30 min, quando o autopilot estava mudo.
+Desde que ele voltou a alertar na hora pelo bot do Hermes, o cron foi removido —
+manteria uma segunda mensagem para a mesma vaga. O script fica versionado aqui caso
+você queira um digest periódico depois.
 
 ## Ferramentas expostas
 
@@ -57,26 +66,29 @@ próximo ciclo — sem reiniciar container. Para valer na hora, peça um ciclo e
 Um lock de arquivo (`.cycle.lock`) impede que o ciclo pedido pelo Hermes atropele o
 ciclo do scheduler: são processos separados no mesmo container.
 
+## Enviar sim, escutar não
+
+São dois flags separados no `config.yaml`, e a distinção é o que evita quebrar tudo:
+
+```yaml
+telegram:
+  enabled: true    # manda alertas (sendMessage / sendDocument)
+  bot: false       # roda o bot próprio com polling e botões
+```
+
+Quem faz `getUpdates` naquele token é o gateway do Hermes. Se o autopilot também
+fizesse polling, a Bot API derrubaria um dos dois com
+`Conflict: terminated by other getUpdates request`. Por isso **`bot` tem que
+continuar `false`** — enviar é seguro, escutar não.
+
+Como consequência, os botões inline de aprovar/ignorar não existem mais: ninguém
+trataria o callback. A mensagem traz o `uid` e você responde ao Hermes em linguagem
+natural ("aplica a da Nubank", "descarta essa").
+
 ## Operação
 
 ```bash
 ssh hermes-vps 'docker exec hermes hermes mcp test autopilot'   # valida a conexão
 ssh hermes-vps 'docker exec hermes hermes cron list'            # jobs agendados
-ssh hermes-vps 'docker exec hermes python3 /opt/data/scripts/autopilot_watch.py'
+ssh hermes-vps 'cd autocv && docker compose logs -f'            # logs do autopilot
 ```
-
-O watcher roda a cada 30 min (`*/30 * * * *`) e é silencioso por padrão: sem vaga
-nova, sem mensagem.
-
-Para reinstalar o watcher depois de mudá-lo aqui:
-
-```bash
-scp hermes/autopilot_watch.py hermes-vps:/root/hermes-data/scripts/
-```
-
-## O bot antigo
-
-`telegram.enabled: false` no `config.yaml` do autopilot. Isso cala tanto o bot quanto
-os alertas — antes o flag só desligava o bot e o token do `.env` mantinha as DMs
-saindo pela identidade antiga, o que causava `telegram.error.Conflict` quando duas
-instâncias faziam polling do mesmo token.
