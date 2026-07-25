@@ -49,7 +49,17 @@ class LimitsConfig(BaseModel):
 
 
 class TelegramConfig(BaseModel):
-    enabled: bool = True
+    """Envio e polling são coisas separadas.
+
+    Desde que o Hermes virou o maestro, o autopilot manda as mensagens pelo bot
+    *dele* — mesma conversa, mesma identidade. Mas quem faz getUpdates naquele token
+    é o gateway do Hermes: se o autopilot também fizesse polling, os dois brigariam
+    e a Bot API derrubaria um com `Conflict: terminated by other getUpdates request`.
+    Por isso `bot` é falso por padrão: enviar pode, escutar não.
+    """
+
+    enabled: bool = True   # manda alertas (sendMessage/sendDocument)
+    bot: bool = False      # roda o bot próprio com polling e botões
 
     @property
     def token(self) -> str:

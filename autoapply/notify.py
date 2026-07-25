@@ -21,9 +21,13 @@ def _esc(value) -> str:
 
 
 class TelegramNotifier:
-    def __init__(self, token: str, chat_id: str):
+    def __init__(self, token: str, chat_id: str, interactive: bool = False):
         self.token = token
         self.chat_id = chat_id
+        # Botão inline só faz sentido se alguém estiver ouvindo o callback. Com o
+        # bot próprio desligado quem responde é o Hermes, em linguagem natural —
+        # botão aqui viraria clique sem efeito.
+        self.interactive = interactive
 
     @property
     def enabled(self) -> bool:
@@ -72,11 +76,14 @@ class TelegramNotifier:
             f"<i>{_esc((job_row['score_reasoning'] or '')[:600])}</i>"
         )
         buttons = None
-        if mode_review:
+        if mode_review and self.interactive:
             buttons = [[
                 {"text": "✅ Aplicar", "callback_data": f"approve:{uid}"},
                 {"text": "❌ Ignorar", "callback_data": f"reject:{uid}"},
             ]]
+        elif not self.interactive:
+            text += (f"\n\n<code>{_esc(uid)}</code>\n"
+                     "💬 Me diga o que fazer: aplicar, descartar ou ver o detalhe.")
         self.send(text, buttons)
         if resume_file:
             self.send_document(Path(resume_file), caption=f"CV adaptado — {job_row['title']}")

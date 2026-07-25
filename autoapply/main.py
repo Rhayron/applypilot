@@ -20,6 +20,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+# O httpx loga a URL inteira em INFO, e a URL da Bot API carrega o token:
+# .../bot<TOKEN>/getUpdates. Isso jogava o segredo em texto puro nos logs do
+# container. Em WARNING as falhas continuam aparecendo, o token não.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("autoapply")
 
 
@@ -111,10 +115,11 @@ def main() -> None:
         scheduler.start()
         log.info("Scheduler ativo (a cada %d min). Iniciando bot...",
                  cfg.search.interval_minutes)
-        if cfg.telegram.enabled and cfg.telegram.token:
+        if cfg.telegram.bot and cfg.telegram.token:
             run_bot(orch)  # bloqueia; scheduler roda em background
         else:
-            log.warning("Telegram desabilitado — rodando só o scheduler (Ctrl+C para sair)")
+            log.info("Bot próprio desligado (quem escuta é o Hermes); alertas: %s",
+                     "ligados" if cfg.telegram.enabled else "desligados")
             threading.Event().wait()
 
 

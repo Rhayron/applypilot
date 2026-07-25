@@ -39,7 +39,8 @@ class Orchestrator:
         # vem do .env e continuaria valendo, fazendo o autopilot mandar DM pela
         # identidade antiga em paralelo com quem estiver reportando por ele.
         self.notifier = TelegramNotifier(
-            cfg.telegram.token if cfg.telegram.enabled else "", cfg.telegram.chat_id
+            cfg.telegram.token if cfg.telegram.enabled else "", cfg.telegram.chat_id,
+            interactive=cfg.telegram.bot,
         )
         self.resume = cfg.load_resume()
         self.context = cfg.load_context()
