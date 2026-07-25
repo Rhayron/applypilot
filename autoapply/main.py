@@ -35,6 +35,7 @@ def main() -> None:
     sub.add_parser("status", help="estatísticas")
     sub.add_parser("metrics", help="histórico de métricas por ciclo")
     sub.add_parser("mcp", help="servidor MCP via stdio (usado pelo Hermes)")
+    sub.add_parser("pending", help="vagas aguardando decisão, em JSON")
     args = parser.parse_args()
 
     # O MCP fala o protocolo por stdout: precisa sair antes que qualquer outra coisa
@@ -74,6 +75,16 @@ def main() -> None:
                 print(f"  {r['ran_at']}  disc={r['discovered']} new={r['new']} "
                       f"tail={r['tailored']} appl={r['applied']} "
                       f"alert={r['alerted']} fail={r['failed']} skip={r['skipped']}")
+
+    elif args.cmd == "pending":
+        # Consumido pelo watcher do Hermes, que reporta as novidades no chat.
+        import json as _json
+        print(_json.dumps([
+            {"uid": r["uid"], "title": r["title"], "company": r["company"],
+             "location": r["location"], "score": r["score"], "url": r["url"],
+             "changes_summary": r["changes_summary"], "pdf_path": r["pdf_path"]}
+            for r in orch.tracker.pending_review()
+        ], ensure_ascii=False))
 
     elif args.cmd == "tailor":
         summary, path = orch.tailor_url(args.url)
