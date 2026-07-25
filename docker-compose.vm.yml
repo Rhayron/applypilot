@@ -1,0 +1,17 @@
+# Compose para a VM (Oracle E2.1.Micro, 1 GB).
+# Uso:  docker compose -f docker-compose.vm.yml up -d --build
+services:
+  autoapply:
+    build:
+      context: .
+      dockerfile: Dockerfile.light
+    env_file: .env
+    volumes:
+      - ./:/data          # config.yaml, profile/, out/, autoapply.db
+    restart: unless-stopped
+    # Evita que os logs encham o disco com o tempo (o app loga bastante).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

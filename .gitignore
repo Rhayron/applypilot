@@ -8,6 +8,11 @@ context/
 out/
 *.zip
 
+# === Chaves SSH (NUNCA commitar) ===
+*.key
+*.key.pub
+*.pem
+
 # === Banco de dados local ===
 autoapply.db
 autoapply.db-shm
