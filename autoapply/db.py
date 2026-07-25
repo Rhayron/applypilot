@@ -126,6 +126,20 @@ class Tracker:
                 "SELECT * FROM jobs WHERE status='pending_review' ORDER BY score DESC"
             ).fetchall()
 
+    def awaiting_decision(self) -> list[sqlite3.Row]:
+        """Vagas com CV pronto esperando o usuário — a fila que importa reportar.
+
+        São dois status, não um: 'pending_review' é o que dá para candidatar
+        automaticamente (greenhouse e lever), e 'alerted' é o resto, que exige envio
+        manual. Reportar só o primeiro esconderia a maioria das vagas, já que a maior
+        parte das fontes não tem automação de envio.
+        """
+        with self._lock:
+            return self.conn.execute(
+                "SELECT * FROM jobs WHERE status IN ('pending_review','alerted') "
+                "ORDER BY score DESC"
+            ).fetchall()
+
     def stats(self) -> dict:
         with self._lock:
             rows = self.conn.execute(

@@ -51,6 +51,8 @@ def main() -> None:
         linhas.append(f"🔗 {v['url']}")
         if v.get("changes_summary"):
             linhas.append(f"✏️ {v['changes_summary'][:220]}")
+        linhas.append("🤖 posso enviar a candidatura" if v.get("auto_aplicavel")
+                      else "✍️ esta fonte exige envio manual")
         linhas.append(f"<code>{v['uid']}</code>")
     if len(novas) > MAX_DETALHE:
         linhas.append("")

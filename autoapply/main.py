@@ -82,8 +82,9 @@ def main() -> None:
         print(_json.dumps([
             {"uid": r["uid"], "title": r["title"], "company": r["company"],
              "location": r["location"], "score": r["score"], "url": r["url"],
-             "changes_summary": r["changes_summary"], "pdf_path": r["pdf_path"]}
-            for r in orch.tracker.pending_review()
+             "changes_summary": r["changes_summary"], "pdf_path": r["pdf_path"],
+             "auto_aplicavel": r["status"] == "pending_review"}
+            for r in orch.tracker.awaiting_decision()
         ], ensure_ascii=False))
 
     elif args.cmd == "tailor":

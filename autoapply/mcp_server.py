@@ -120,16 +120,21 @@ def build_server(config_path: str):
         return [_brief(r) for r in rows]
 
     @mcp.tool()
-    def pending_review() -> list[dict]:
-        """Vagas com CV pronto esperando a decisão do usuário. É a fila que o Hermes
-        deve reportar no chat — cada uma traz o resumo do que foi adaptado e o
-        caminho do PDF dentro do container."""
+    def awaiting_decision() -> list[dict]:
+        """Vagas com CV pronto esperando o usuário. É a fila para reportar no chat.
+
+        Cada item traz `auto_aplicavel`: quando True (fontes greenhouse e lever), dá
+        para enviar a candidatura com apply_job depois que o usuário aprovar. Quando
+        False, não existe automação de envio para aquela fonte — entregue o PDF e o
+        link para ele se candidatar à mão. A maioria das vagas cai neste segundo caso.
+        """
         out = []
-        for r in orch.tracker.pending_review():
+        for r in orch.tracker.awaiting_decision():
             d = _brief(r)
             d["score_reasoning"] = r["score_reasoning"]
             d["changes_summary"] = r["changes_summary"]
             d["pdf_path"] = r["pdf_path"]
+            d["auto_aplicavel"] = r["status"] == "pending_review"
             out.append(d)
         return out
 
@@ -238,11 +243,15 @@ def build_server(config_path: str):
         vaga, com o nome e o currículo dele.
 
         NUNCA chame sem o usuário ter aprovado explicitamente esta vaga específica no
-        chat. Aprovação para uma vaga não vale para outra. Só funciona em vagas que
-        estão em pending_review."""
+        chat. Aprovação para uma vaga não vale para outra. Só funciona em vagas com
+        auto_aplicavel=True; para as demais, oriente o usuário a aplicar à mão."""
         row = orch.tracker.get(uid)
         if not row:
             return {"erro": f"vaga {uid} não encontrada"}
+        if row["status"] == "alerted":
+            return {"erro": "esta fonte não tem automação de envio (auto_aplicavel=False). "
+                            "Entregue o PDF e o link para o usuário se candidatar à mão.",
+                    "url": row["url"], "pdf_path": row["pdf_path"]}
         if row["status"] != "pending_review":
             return {"erro": f"vaga está em '{row['status']}', não em 'pending_review'; "
                             "só candidaturas revisadas podem ser enviadas"}
