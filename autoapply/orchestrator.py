@@ -25,16 +25,79 @@ class Orchestrator:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.tracker = Tracker(cfg.base_dir / cfg.output.db_path)
+        self._config_path = cfg.base_dir / "config.yaml"
+        self._config_mtime = self._mtime()
+        self._apply_cfg()
+
+    # ------------------------------------------------------------------
+    def _apply_cfg(self) -> None:
+        """(Re)constrói tudo que deriva do config."""
+        cfg = self.cfg
         self.llm = LLM(cfg.llm.model, cfg.llm.temperature)
         self.scoring_llm = LLM(cfg.llm.scoring_model, cfg.llm.temperature)
-        self.notifier = TelegramNotifier(cfg.telegram.token, cfg.telegram.chat_id)
+        # telegram.enabled=false precisa calar o notificador, não só o bot: o token
+        # vem do .env e continuaria valendo, fazendo o autopilot mandar DM pela
+        # identidade antiga em paralelo com quem estiver reportando por ele.
+        self.notifier = TelegramNotifier(
+            cfg.telegram.token if cfg.telegram.enabled else "", cfg.telegram.chat_id
+        )
         self.resume = cfg.load_resume()
         self.context = cfg.load_context()
         self.answers = cfg.load_answers()
 
+    def _mtime(self) -> float:
+        return self._config_path.stat().st_mtime if self._config_path.exists() else 0.0
+
+    def reload_config(self) -> bool:
+        """Relê o config.yaml do disco. Devolve True se algo mudou.
+
+        É o que faz os ajustes do Hermes valerem sem reiniciar o container: ele grava
+        no arquivo e o próximo ciclo já roda com os valores novos.
+        """
+        from .config import load_config
+
+        mtime = self._mtime()
+        if mtime == self._config_mtime:
+            return False
+        try:
+            new_cfg = load_config(self._config_path)
+        except Exception:  # noqa: BLE001
+            log.exception("config.yaml inválido; seguindo com a configuração anterior")
+            return False
+        self._config_mtime = mtime
+        self.cfg = new_cfg
+        self._apply_cfg()
+        log.info("Configuração recarregada do disco.")
+        return True
+
+    def run_cycle_locked(self):
+        """run_cycle protegido por lock de arquivo entre processos.
+
+        O scheduler e o servidor MCP são processos separados dentro do mesmo
+        container; sem isto, um ciclo pedido pelo Hermes rodaria por cima do ciclo
+        agendado, duplicando chamadas de LLM. Devolve None se já havia um em curso.
+        """
+        try:
+            import fcntl
+        except ImportError:  # Windows (dev local): sem lock, processo único mesmo
+            return self.run_cycle()
+
+        lock_path = self.cfg.base_dir / ".cycle.lock"
+        with open(lock_path, "w") as fh:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                log.info("Ciclo já em andamento em outro processo; ignorando pedido.")
+                return None
+            try:
+                return self.run_cycle()
+            finally:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
     # ------------------------------------------------------------------
     def run_cycle(self) -> dict:
         """Um ciclo completo. Retorna estatísticas."""
+        self.reload_config()
         stats = {"discovered": 0, "new": 0, "tailored": 0, "applied": 0,
                  "alerted": 0, "failed": 0, "skipped": 0}
         sources = {s.name: s for s in enabled_sources(self.cfg)}

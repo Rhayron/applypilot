@@ -7,6 +7,7 @@ Uso:
   autoapply tailor <url>         # adapta o CV para uma vaga específica
   autoapply status               # estatísticas do tracker (vagas por status)
   autoapply metrics              # histórico de métricas por ciclo de busca
+  autoapply mcp                  # servidor MCP (stdio) — é por aqui que o Hermes controla
   autoapply -c outro/config.yaml once
 """
 from __future__ import annotations
@@ -33,7 +34,15 @@ def main() -> None:
     p_tailor.add_argument("url")
     sub.add_parser("status", help="estatísticas")
     sub.add_parser("metrics", help="histórico de métricas por ciclo")
+    sub.add_parser("mcp", help="servidor MCP via stdio (usado pelo Hermes)")
     args = parser.parse_args()
+
+    # O MCP fala o protocolo por stdout: precisa sair antes que qualquer outra coisa
+    # (logs de boot, avisos do litellm) suje o canal.
+    if args.cmd == "mcp":
+        from .mcp_server import run as run_mcp
+        run_mcp(args.config)
+        return
 
     from .config import load_config
     from .orchestrator import Orchestrator
@@ -82,7 +91,7 @@ def main() -> None:
 
         scheduler = BackgroundScheduler()
         scheduler.add_job(
-            orch.run_cycle, "interval",
+            orch.run_cycle_locked, "interval",
             minutes=cfg.search.interval_minutes,
             next_run_time=__import__("datetime").datetime.now(),
             max_instances=1, coalesce=True,
