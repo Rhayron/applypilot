@@ -33,6 +33,7 @@ class ApplicationStatus(str, Enum):
     DISCOVERED = "discovered"
     SCORED = "scored"
     SKIPPED = "skipped"            # score baixo
+    PENDING_GENERATION = "pending_generation"  # passou no corte, espera você mandar gerar
     TAILORED = "tailored"
     PENDING_REVIEW = "pending_review"
     APPROVED = "approved"

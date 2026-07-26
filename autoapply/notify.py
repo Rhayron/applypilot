@@ -88,6 +88,23 @@ class TelegramNotifier:
         if resume_file:
             self.send_document(Path(resume_file), caption=f"CV adaptado — {job_row['title']}")
 
+    def vaga_encontrada(self, job_row) -> None:
+        """Vaga passou no corte, currículo ainda NÃO foi gerado.
+
+        É o ponto onde o fluxo espera sua decisão. Sem botão inline aqui de
+        propósito: quem escuta este bot é o gateway do Hermes, e é com ele que você
+        responde — os botões de confirmar aparecem quando ele vai executar a ação.
+        """
+        self.send(
+            f"🔎 <b>Vaga encontrada</b> — score <b>{job_row['score']}</b>/100\n"
+            f"<b>{_esc(job_row['title'])}</b> @ {_esc(job_row['company'])}\n"
+            f"📍 {_esc(job_row['location'] or 'n/d')}\n"
+            f"🔗 {_esc(job_row['url'])}\n\n"
+            f"<i>{_esc((job_row['score_reasoning'] or '')[:500])}</i>\n\n"
+            f"<code>{_esc(job_row['uid'])}</code>\n"
+            f"💬 Gero o currículo com <b>Claude</b> ou <b>Gemini</b>? Ou descarto?"
+        )
+
     def failure_alert(self, job_row, reason: str, resume_file: Optional[Path]) -> None:
         text = (
             f"⚠️ <b>Não consegui aplicar automaticamente</b>\n"

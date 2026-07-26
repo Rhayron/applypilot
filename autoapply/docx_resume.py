@@ -366,8 +366,14 @@ def _editar_com_gemini(llm, base: Path, saida: Path, vaga_txt: str,
 
 
 # ------------------------------------------------------------------------- orquestração
-def adaptar(job, base: Path, saida: Path, llm=None) -> ResultadoAdaptacao:
-    """Adapta o currículo para a vaga. Claude primeiro, Gemini como rede.
+def adaptar(job, base: Path, saida: Path, llm=None,
+            editor: str = "auto") -> ResultadoAdaptacao:
+    """Adapta o currículo para a vaga.
+
+    `editor`: "auto" tenta o Claude e cai para o Gemini; "claude" e "gemini" forçam
+    um deles, para você escolher no chat. Forçar o Claude não desativa a rede: se ele
+    falhar de verdade, o Gemini ainda entrega, porque ficar sem currículo é pior que
+    trocar de editor.
 
     A validação roda nos dois caminhos: um .docx que perdeu seções ou ganhou
     travessão é tratado como falha, não como resultado aceitável.
@@ -383,17 +389,18 @@ def adaptar(job, base: Path, saida: Path, llm=None) -> ResultadoAdaptacao:
                 f"Local: {job.location or 'não informado'}\n\n"
                 f"{(job.description or '')[:6000]}")
 
-    try:
-        r = _editar_com_claude(base, saida, vaga_txt, idioma)
-        r.idioma = idioma
-        problemas = validar(base, r.caminho, traduzido=traduz)
-        if problemas:
-            raise RuntimeError(f"claude quebrou a formatação: {problemas}")
-        log.info("CV adaptado pelo Claude (%d parágrafos, %s)", r.edicoes, idioma)
-        return r
-    except Exception as e:  # noqa: BLE001
-        log.warning("Claude indisponível ou inválido (%s); caindo para o Gemini",
-                    str(e)[:200])
+    if editor != "gemini":
+        try:
+            r = _editar_com_claude(base, saida, vaga_txt, idioma)
+            r.idioma = idioma
+            problemas = validar(base, r.caminho, traduzido=traduz)
+            if problemas:
+                raise RuntimeError(f"claude quebrou a formatação: {problemas}")
+            log.info("CV adaptado pelo Claude (%d parágrafos, %s)", r.edicoes, idioma)
+            return r
+        except Exception as e:  # noqa: BLE001
+            log.warning("Claude indisponível ou inválido (%s); caindo para o Gemini",
+                        str(e)[:200])
 
     if llm is None:
         raise RuntimeError("Claude falhou e nenhum LLM de fallback foi fornecido")

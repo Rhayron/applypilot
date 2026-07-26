@@ -169,16 +169,18 @@ class Tracker:
             ).fetchall()
 
     def awaiting_decision(self) -> list[sqlite3.Row]:
-        """Vagas com CV pronto esperando o usuário — a fila que importa reportar.
+        """Vagas esperando alguma decisão sua — a fila que importa reportar.
 
-        São dois status, não um: 'pending_review' é o que dá para candidatar
-        automaticamente (greenhouse e lever), e 'alerted' é o resto, que exige envio
-        manual. Reportar só o primeiro esconderia a maioria das vagas, já que a maior
-        parte das fontes não tem automação de envio.
+        São três status, em dois momentos do fluxo: 'pending_generation' é a vaga que
+        passou no corte mas cujo currículo ainda não foi gerado, porque isso agora
+        depende da sua ordem. 'pending_review' e 'alerted' já têm currículo pronto e
+        esperam a decisão de aplicar — o primeiro dá para enviar automaticamente
+        (greenhouse e lever), o segundo exige envio manual.
         """
         with self._lock:
             return self.conn.execute(
-                "SELECT * FROM jobs WHERE status IN ('pending_review','alerted') "
+                "SELECT * FROM jobs "
+                "WHERE status IN ('pending_generation','pending_review','alerted') "
                 "ORDER BY score DESC"
             ).fetchall()
 

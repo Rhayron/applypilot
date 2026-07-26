@@ -144,41 +144,59 @@ class Orchestrator:
             stats["skipped"] += 1
             return
 
-        # 2) adaptação do currículo
-        slug = f"{job.company}-{job.title}-{job.uid[:6]}"
-        resume_file, resume_json, carta, mudancas = self._adaptar(job, slug)
-        self.tracker.set_status(
-            job.uid, ApplicationStatus.TAILORED,
-            resume_json=resume_json, cover_letter=carta,
-            changes_summary=mudancas, pdf_path=str(resume_file),
-        )
-        pdf_path = resume_file if resume_file.suffix == ".pdf" else None
+        # 2) o ciclo para aqui. Gerar currículo custa uma chamada cara de LLM e
+        # produz um documento em seu nome: quem decide é você, pelo chat do Hermes,
+        # que chama gerar_cv() quando você mandar. Em mode=auto o fluxo segue direto.
+        if self.cfg.mode != Mode.AUTO:
+            self.tracker.set_status(job.uid, ApplicationStatus.PENDING_GENERATION)
+            self.notifier.vaga_encontrada(self.tracker.get(job.uid))
+            stats["alerted"] += 1
+            return
+
+        if not self.gerar_cv(job.uid):
+            stats["failed"] += 1
+            return
         stats["tailored"] += 1
-        row = self.tracker.get(job.uid)
-
-        # 3) decidir o que fazer
-        mode = self.cfg.mode
-        can_auto = get_applier(job.source, self._answerer()) is not None and pdf_path is not None
-        if match.score < m.apply_threshold or mode == Mode.ALERT or not can_auto:
-            self.notifier.job_alert(row, resume_file, mode_review=False)
-            self.tracker.set_status(job.uid, ApplicationStatus.ALERTED)
-            stats["alerted"] += 1
-            return
-
-        if mode == Mode.REVIEW:
-            self.notifier.job_alert(row, resume_file, mode_review=True)
-            self.tracker.set_status(job.uid, ApplicationStatus.PENDING_REVIEW)
-            stats["alerted"] += 1
-            return
-
-        # mode == AUTO
         if self._apply_now(job.uid):
             stats["applied"] += 1
         else:
             stats["failed"] += 1
 
     # ------------------------------------------------------------------
-    def _adaptar(self, job: Job, slug: str) -> tuple[Path, dict, str, str]:
+    def gerar_cv(self, uid: str, editor: str = "auto") -> Path | None:
+        """Adapta o currículo para uma vaga já pontuada e manda no chat.
+
+        Só roda quando você pede: é o passo que o ciclo deixou de fazer sozinho.
+        `editor` aceita "claude", "gemini" ou "auto" (Claude com Gemini de reserva).
+        """
+        row = self.tracker.get(uid)
+        if not row:
+            log.warning("gerar_cv: vaga %s não encontrada", uid)
+            return None
+
+        job = Job(source=row["source"], external_id=row["external_id"],
+                  title=row["title"], company=row["company"],
+                  location=row["location"] or "", url=row["url"],
+                  description=row["description"] or "")
+        slug = f"{job.company}-{job.title}-{job.uid[:6]}"
+        arquivo, resume_json, carta, mudancas = self._adaptar(job, slug, editor=editor)
+        self.tracker.set_status(
+            uid, ApplicationStatus.TAILORED, resume_json=resume_json,
+            cover_letter=carta, changes_summary=mudancas, pdf_path=str(arquivo),
+        )
+
+        row = self.tracker.get(uid)
+        pdf = arquivo if arquivo.suffix == ".pdf" else None
+        pode_auto = get_applier(job.source, self._answerer()) is not None and pdf is not None
+        revisavel = pode_auto and (row["score"] or 0) >= self.cfg.matching.apply_threshold
+        self.notifier.job_alert(row, arquivo, mode_review=revisavel)
+        self.tracker.set_status(
+            uid, ApplicationStatus.PENDING_REVIEW if revisavel
+            else ApplicationStatus.ALERTED)
+        return arquivo
+
+    # ------------------------------------------------------------------
+    def _adaptar(self, job: Job, slug: str, editor: str = "auto") -> tuple[Path, dict, str, str]:
         """Gera o currículo da vaga. Edita o .docx do usuário quando ele existe.
 
         Devolve (arquivo_para_enviar, resume_json, cover_letter, resumo_das_mudancas).
@@ -191,7 +209,7 @@ class Orchestrator:
                 from .docx_resume import adaptar
 
                 destino = self.cfg.out_dir / f"{slug}.docx"
-                r = adaptar(job, base, destino, llm=self.llm)
+                r = adaptar(job, base, destino, llm=self.llm, editor=editor)
                 pdf = docx_para_pdf(r.caminho, self.cfg.out_dir)
                 mudancas = r.resumo or f"{r.edicoes} trechos ajustados para a vaga."
                 if r.idioma == "en":

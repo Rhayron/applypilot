@@ -121,16 +121,23 @@ def build_server(config_path: str):
 
     @mcp.tool()
     def awaiting_decision() -> list[dict]:
-        """Vagas com CV pronto esperando o usuário. É a fila para reportar no chat.
+        """Vagas esperando decisão do usuário. É a fila para reportar no chat.
 
-        Cada item traz `auto_aplicavel`: quando True (fontes greenhouse e lever), dá
-        para enviar a candidatura com apply_job depois que o usuário aprovar. Quando
-        False, não existe automação de envio para aquela fonte — entregue o PDF e o
-        link para ele se candidatar à mão. A maioria das vagas cai neste segundo caso.
+        `espera` diz o que falta em cada uma:
+        - "gerar_cv": passou no corte, currículo ainda não existe. Pergunte se ele
+          quer gerar e com qual editor (claude ou gemini), depois chame gerar_cv.
+        - "aplicar": currículo pronto e a fonte aceita envio automático. Peça
+          aprovação e então chame apply_job.
+        - "envio_manual": currículo pronto, mas a fonte não tem automação. Entregue
+          o PDF e o link para ele se candidatar à mão. É a maioria dos casos.
         """
+        espera_por = {"pending_generation": "gerar_cv",
+                      "pending_review": "aplicar",
+                      "alerted": "envio_manual"}
         out = []
         for r in orch.tracker.awaiting_decision():
             d = _brief(r)
+            d["espera"] = espera_por.get(r["status"], r["status"])
             d["score_reasoning"] = r["score_reasoning"]
             d["changes_summary"] = r["changes_summary"]
             d["pdf_path"] = r["pdf_path"]
@@ -180,6 +187,36 @@ def build_server(config_path: str):
             return {"ocupado": True,
                     "detalhe": "um ciclo já está em andamento; tente de novo em instantes"}
         return stats
+
+    @mcp.tool()
+    def gerar_cv(uid: str, editor: str = "auto") -> dict:
+        """Gera o currículo adaptado para uma vaga e manda o PDF no chat.
+
+        Chame quando o usuário decidir que quer o currículo daquela vaga. `editor`:
+        "claude" (melhor texto, mais lento), "gemini" (mais rápido e conservador,
+        preserva mais do original) ou "auto" (Claude com Gemini de reserva). Se o
+        usuário não disser qual, pergunte antes de chamar.
+
+        Custa uma chamada cara de LLM e produz um documento no nome do usuário, então
+        não chame por iniciativa própria em vagas que ele não pediu."""
+        if editor not in ("auto", "claude", "gemini"):
+            return {"erro": f"editor inválido: {editor!r}. Use claude, gemini ou auto"}
+        row = orch.tracker.get(uid)
+        if not row:
+            return {"erro": f"vaga {uid} não encontrada"}
+
+        arquivo = orch.gerar_cv(uid, editor=editor)
+        if not arquivo:
+            return {"erro": "falha ao gerar o currículo; veja os logs"}
+        atual = orch.tracker.get(uid)
+        return {
+            "uid": uid,
+            "arquivo": str(arquivo),
+            "status": atual["status"],
+            "auto_aplicavel": atual["status"] == "pending_review",
+            "mudancas": atual["changes_summary"],
+            "enviado_no_chat": True,
+        }
 
     @mcp.tool()
     def tailor_url(url: str) -> dict:
