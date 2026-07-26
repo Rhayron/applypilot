@@ -9,6 +9,9 @@ services:
       # container e host sempre com o mesmo login.
       - /root/.local/share/claude:/opt/claude:ro
       - /root/.claude:/root/.claude
+      # O .claude.json fica FORA do diretório .claude/ e é obrigatório: sem ele o
+      # CLI aborta com "configuration file not found".
+      - /root/.claude.json:/root/.claude.json
     environment:
       CLAUDE_BIN: /opt/claude/versions/2.1.220
       CLAUDE_MODEL: opus
