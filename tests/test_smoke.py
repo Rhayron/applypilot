@@ -256,6 +256,42 @@ def test_aplicar_mudancas_nao_grava_config_invalida(tmp_path):
     assert _yaml.safe_load(p.read_text(encoding="utf-8")) == original
 
 
+def _vaga(remote):
+    return Job(source="x", external_id=str(remote), title="Software Engineer",
+               company="ACME", url="http://x", remote=remote)
+
+
+def test_modalidade_ambos_aceita_os_dois():
+    f = _fonte(titles=["Software Engineer"], modalidade="ambos")
+    assert f._passes_filters(_vaga(True))    # remota
+    assert f._passes_filters(_vaga(False))   # presencial
+    assert f._passes_filters(_vaga(None))    # não informado
+
+
+def test_modalidade_remoto_descarta_presencial():
+    f = _fonte(titles=["Software Engineer"], modalidade="remoto")
+    assert f._passes_filters(_vaga(True))
+    assert not f._passes_filters(_vaga(False))
+    assert f._passes_filters(_vaga(None))    # omissão nunca descarta
+
+
+def test_modalidade_presencial_descarta_remoto():
+    f = _fonte(titles=["Software Engineer"], modalidade="presencial")
+    assert not f._passes_filters(_vaga(True))
+    assert f._passes_filters(_vaga(False))
+    assert f._passes_filters(_vaga(None))
+
+
+def test_config_antiga_sem_modalidade_continua_valendo():
+    """remote_only é o que existe nos config.yaml já gravados."""
+    from autoapply.config import Modalidade, SearchConfig
+
+    assert SearchConfig(remote_only=True).modo is Modalidade.REMOTO
+    assert SearchConfig(remote_only=False).modo is Modalidade.AMBOS
+    # modalidade explícita tem precedência sobre o flag antigo
+    assert SearchConfig(remote_only=True, modalidade="ambos").modo is Modalidade.AMBOS
+
+
 def test_render_resume(tmp_path):
     html, pdf = render_resume(RESUME, tmp_path, "teste")
     content = html.read_text(encoding="utf-8")

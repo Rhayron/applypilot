@@ -73,7 +73,15 @@ class JobSource(abc.ABC):
         if s.locations and not self._bate_local(job, s.locations):
             return False
 
-        if s.remote_only and job.remote is False:
+        # Modalidade. `job.remote` é tri-estado: True remoto, False presencial,
+        # None desconhecido. O desconhecido sempre passa — a maioria das fontes não
+        # informa, e descartar por omissão jogaria fora quase tudo.
+        from ..config import Modalidade
+
+        modo = s.modo
+        if modo is Modalidade.REMOTO and job.remote is False:
+            return False
+        if modo is Modalidade.PRESENCIAL and job.remote is True:
             return False
         return True
 

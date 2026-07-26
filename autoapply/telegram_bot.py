@@ -77,7 +77,9 @@ Sem argumento, mostra os filtros atuais. Para mudar:
 <code>/filtros -titulo Fullstack Developer</code>
 <code>/filtros +palavra rtos, microcontrolador</code>
 <code>/filtros -palavra angular</code>
-<code>/filtros remoto on</code>   ou <code>off</code>
+<code>/filtros modalidade remoto</code>      só vaga remota
+<code>/filtros modalidade presencial</code>  só vaga presencial
+<code>/filtros modalidade ambos</code>       híbrido: aceita as duas
 <code>/filtros dias 14</code>     (idade máxima da vaga)
 <code>/filtros intervalo 120</code> (minutos entre ciclos)
 <code>/filtros corte 70</code>    (nota mínima para me avisar)
@@ -87,6 +89,13 @@ Sem argumento, mostra os filtros atuais. Para mudar:
 • <b>palavra</b> casa no título <i>ou</i> na descrição. Use termo de nicho que
   costuma estar no corpo, como "firmware embarcado" ou "visão computacional".
 Uma vaga entra se bate um titulo <i>ou</i> uma palavra.
+
+<b>Modalidade + local</b> — combinam assim:
+• <code>remoto</code> + local → poucas vagas: anúncio remoto raramente cita cidade.
+• <code>presencial</code> + local → o uso natural de filtrar por cidade.
+• <code>ambos</code> + local → pega presencial na cidade e remoto que a mencione.
+Vaga que não informa a modalidade sempre passa, porque a maioria das fontes omite
+e descartar por omissão jogaria fora quase tudo.
 
 Mudança vale no próximo ciclo e não reavalia vaga já vista."""
 
@@ -152,7 +161,8 @@ def _resumo_filtros(s) -> str:
         f"<b>Títulos</b> ({len(s.titles)}): {', '.join(s.titles) or '—'}\n\n"
         f"<b>Palavras</b> ({len(s.keywords)}): {', '.join(s.keywords) or '—'}\n\n"
         f"<b>Locais</b>: {', '.join(s.locations) or 'qualquer lugar'}\n"
-        f"<b>Só remoto</b>: {'sim' if s.remote_only else 'não'}\n"
+        f"<b>Modalidade</b>: {s.modo.value}"
+        f"{' (remoto + presencial)' if s.modo.value == 'ambos' else ''}\n"
         f"<b>Idade máxima</b>: {s.max_age_days} dias\n"
         f"<b>Intervalo</b>: {s.interval_minutes} min\n\n"
         f"<i>/help mostra como mudar cada um.</i>"
@@ -191,11 +201,20 @@ async def cmd_filtros(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     elif acao == "-palavra":
         fora = {v.lower() for v in _lista(valor)}
         mudancas["search.keywords"] = [k for k in s.keywords if k.lower() not in fora]
-    elif acao == "remoto":
-        if valor.lower() not in ("on", "off"):
-            erro = "use <code>/filtros remoto on</code> ou <code>off</code>"
+    elif acao in ("modalidade", "modo", "remoto"):
+        v = valor.lower()
+        # "remoto on/off" continua valendo: era a forma antiga e vira modalidade.
+        equivalente = {"on": "remoto", "off": "ambos", "sim": "remoto", "nao": "ambos",
+                       "não": "ambos", "hibrido": "ambos", "híbrido": "ambos",
+                       "todos": "ambos", "qualquer": "ambos"}
+        v = equivalente.get(v, v)
+        if v not in ("remoto", "presencial", "ambos"):
+            erro = ("use <code>/filtros modalidade remoto</code>, "
+                    "<code>presencial</code> ou <code>ambos</code>")
         else:
-            mudancas["search.remote_only"] = valor.lower() == "on"
+            mudancas["search.modalidade"] = v
+            # Mantém o flag antigo coerente para quem ler o config na mão.
+            mudancas["search.remote_only"] = v == "remoto"
     elif acao in ("dias", "intervalo", "corte"):
         campo = {"dias": "search.max_age_days",
                  "intervalo": "search.interval_minutes",

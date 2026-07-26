@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
@@ -32,13 +33,32 @@ class ProfileConfig(BaseModel):
     docx_path: str = "profile/base.docx"
 
 
+class Modalidade(str, Enum):
+    REMOTO = "remoto"
+    PRESENCIAL = "presencial"
+    AMBOS = "ambos"        # híbrido: aceita as duas
+
+
 class SearchConfig(BaseModel):
     interval_minutes: int = 180
     titles: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     locations: list[str] = Field(default_factory=list)
     remote_only: bool = False
+    modalidade: Optional[Modalidade] = None
     max_age_days: int = 7
+
+    @property
+    def modo(self) -> Modalidade:
+        """Modalidade efetiva.
+
+        `remote_only` é booleano e não comporta "aceito os dois", que é justamente o
+        caso híbrido. `modalidade` substitui o flag; quando ausente, é derivada dele
+        para não quebrar config antiga nem exigir migração do arquivo.
+        """
+        if self.modalidade is not None:
+            return self.modalidade
+        return Modalidade.REMOTO if self.remote_only else Modalidade.AMBOS
 
 
 class MatchingConfig(BaseModel):
@@ -138,6 +158,7 @@ SETTABLE = (
     "search.keywords",
     "search.locations",
     "search.remote_only",
+    "search.modalidade",
     "search.max_age_days",
     "limits.max_applications_per_day",
     "limits.min_seconds_between_applications",
