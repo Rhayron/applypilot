@@ -33,10 +33,13 @@ def run_bot(orch: Orchestrator) -> None:
     app = Application.builder().token(token).build()
     app.bot_data["orch"] = orch
 
-    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("start", cmd_help))
+    app.add_handler(CommandHandler("help", cmd_help))
+    app.add_handler(CommandHandler("ajuda", cmd_help))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("metrics", cmd_metrics))
     app.add_handler(CommandHandler("pending", cmd_pending))
+    app.add_handler(CommandHandler("filtros", cmd_filtros))
     app.add_handler(CallbackQueryHandler(on_button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
 
@@ -44,14 +47,54 @@ def run_bot(orch: Orchestrator) -> None:
     app.run_polling()
 
 
-async def cmd_start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+AJUDA = """🤖 <b>AutoPilot</b> — busca vagas, adapta seu currículo e candidata.
+
+<b>Como funciona</b>
+A cada {intervalo} min eu procuro vagas e pontuo cada uma. As que passam do corte
+viram uma mensagem com botões:
+  [🤖 Claude] [⚡ Gemini] — gera o CV adaptado com esse editor
+  [❌ Descartar] — some da fila
+Depois do CV pronto, se a fonte aceitar envio automático, aparecem
+  [✅ Aplicar] [❌ Ignorar]
+Nada é gerado nem enviado sem você clicar.
+
+<b>Comandos</b>
+/status — quantas vagas em cada estágio, aplicações de hoje
+/pending — reenvia a fila com os botões de cada uma
+/metrics — histórico dos ciclos
+/filtros — ver e mudar o que eu procuro (veja abaixo)
+/help — esta mensagem
+
+<b>Enviar um link</b>
+Cole a URL de uma vaga e eu adapto seu currículo para ela na hora.
+
+<b>/filtros</b>
+Sem argumento, mostra os filtros atuais. Para mudar:
+
+<code>/filtros local Curitiba, São Paulo</code>
+<code>/filtros local -</code>  (aceita de qualquer lugar)
+<code>/filtros +titulo Firmware Engineer</code>
+<code>/filtros -titulo Fullstack Developer</code>
+<code>/filtros +palavra rtos, microcontrolador</code>
+<code>/filtros -palavra angular</code>
+<code>/filtros remoto on</code>   ou <code>off</code>
+<code>/filtros dias 14</code>     (idade máxima da vaga)
+<code>/filtros intervalo 120</code> (minutos entre ciclos)
+<code>/filtros corte 70</code>    (nota mínima para me avisar)
+
+<b>titulo x palavra</b> — a diferença importa:
+• <b>titulo</b> casa só no nome do cargo. Use o que aparece no título do anúncio.
+• <b>palavra</b> casa no título <i>ou</i> na descrição. Use termo de nicho que
+  costuma estar no corpo, como "firmware embarcado" ou "visão computacional".
+Uma vaga entra se bate um titulo <i>ou</i> uma palavra.
+
+Mudança vale no próximo ciclo e não reavalia vaga já vista."""
+
+
+async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    orch: Orchestrator = ctx.bot_data["orch"]
     await update.message.reply_text(
-        "🤖 AutoApply\n\n"
-        "• Envie o link de uma vaga e eu devolvo seu CV adaptado.\n"
-        "• /status — estatísticas\n"
-        "• /pending — vagas aguardando sua aprovação\n"
-        f"• Seu chat_id é {update.effective_chat.id} (coloque em TELEGRAM_CHAT_ID)"
-    )
+        AJUDA.format(intervalo=orch.cfg.search.interval_minutes), parse_mode="HTML")
 
 
 async def cmd_status(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -96,6 +139,88 @@ async def cmd_pending(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             orch.notifier.job_alert(row, arquivo,
                                     mode_review=row["status"] == "pending_review")
     await update.message.reply_text(f"{len(rows)} vaga(s) na fila.")
+
+
+def _lista(texto: str) -> list[str]:
+    """'Curitiba, São Paulo' -> ['Curitiba', 'São Paulo']."""
+    return [x.strip() for x in texto.split(",") if x.strip()]
+
+
+def _resumo_filtros(s) -> str:
+    return (
+        f"🔎 <b>Filtros atuais</b>\n\n"
+        f"<b>Títulos</b> ({len(s.titles)}): {', '.join(s.titles) or '—'}\n\n"
+        f"<b>Palavras</b> ({len(s.keywords)}): {', '.join(s.keywords) or '—'}\n\n"
+        f"<b>Locais</b>: {', '.join(s.locations) or 'qualquer lugar'}\n"
+        f"<b>Só remoto</b>: {'sim' if s.remote_only else 'não'}\n"
+        f"<b>Idade máxima</b>: {s.max_age_days} dias\n"
+        f"<b>Intervalo</b>: {s.interval_minutes} min\n\n"
+        f"<i>/help mostra como mudar cada um.</i>"
+    )
+
+
+async def cmd_filtros(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Mostra e ajusta os filtros de busca sem sair do chat."""
+    from .config import aplicar_mudancas
+
+    orch: Orchestrator = ctx.bot_data["orch"]
+    args = (ctx.args or [])
+    if not args:
+        await update.message.reply_text(_resumo_filtros(orch.cfg.search),
+                                        parse_mode="HTML")
+        return
+
+    acao, valor = args[0].lower(), " ".join(args[1:]).strip()
+    s = orch.cfg.search
+    mudancas: dict = {}
+    erro = None
+
+    if acao == "local":
+        mudancas["search.locations"] = [] if valor in ("-", "") else _lista(valor)
+    elif acao in ("+titulo", "+título"):
+        atuais = {t.lower() for t in s.titles}
+        mudancas["search.titles"] = s.titles + [
+            v for v in _lista(valor) if v.lower() not in atuais]
+    elif acao in ("-titulo", "-título"):
+        fora = {v.lower() for v in _lista(valor)}
+        mudancas["search.titles"] = [t for t in s.titles if t.lower() not in fora]
+    elif acao == "+palavra":
+        atuais = {k.lower() for k in s.keywords}
+        mudancas["search.keywords"] = s.keywords + [
+            v for v in _lista(valor) if v.lower() not in atuais]
+    elif acao == "-palavra":
+        fora = {v.lower() for v in _lista(valor)}
+        mudancas["search.keywords"] = [k for k in s.keywords if k.lower() not in fora]
+    elif acao == "remoto":
+        if valor.lower() not in ("on", "off"):
+            erro = "use <code>/filtros remoto on</code> ou <code>off</code>"
+        else:
+            mudancas["search.remote_only"] = valor.lower() == "on"
+    elif acao in ("dias", "intervalo", "corte"):
+        campo = {"dias": "search.max_age_days",
+                 "intervalo": "search.interval_minutes",
+                 "corte": "matching.alert_threshold"}[acao]
+        try:
+            mudancas[campo] = int(valor)
+        except ValueError:
+            erro = f"<code>/filtros {acao}</code> espera um número"
+    else:
+        erro = f"não conheço <code>{acao}</code>. Veja /help"
+
+    if erro:
+        await update.message.reply_text(f"⚠️ {erro}", parse_mode="HTML")
+        return
+
+    r = await asyncio.to_thread(aplicar_mudancas,
+                                orch.cfg.base_dir / "config.yaml", mudancas)
+    if r.get("erro"):
+        await update.message.reply_text(f"⚠️ {r['erro']}")
+        return
+    # Recarrega já, para o /filtros seguinte mostrar o valor novo.
+    await asyncio.to_thread(orch.reload_config)
+    await update.message.reply_text(
+        "✅ Atualizado. Vale no próximo ciclo.\n\n" + _resumo_filtros(orch.cfg.search),
+        parse_mode="HTML")
 
 
 async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

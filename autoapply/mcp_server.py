@@ -22,24 +22,9 @@ from typing import Any, Optional
 
 import yaml
 
-log = logging.getLogger(__name__)
+from .config import SETTABLE  # whitelist compartilhada com o bot
 
-# Campos que o Hermes pode ajustar sozinho. Tudo que não estiver aqui é recusado —
-# o agente não deve conseguir reescrever caminhos de perfil, banco ou credenciais.
-SETTABLE = (
-    "mode",
-    "matching.apply_threshold",
-    "matching.alert_threshold",
-    "search.interval_minutes",
-    "search.titles",
-    "search.keywords",
-    "search.locations",
-    "search.remote_only",
-    "search.max_age_days",
-    "limits.max_applications_per_day",
-    "limits.min_seconds_between_applications",
-    "llm.temperature",
-)
+log = logging.getLogger(__name__)
 
 # Colunas pesadas: nunca voltam numa listagem, só sob demanda em job_detail.
 _HEAVY = ("description", "resume_json")
@@ -259,34 +244,13 @@ def build_server(config_path: str):
         e vale a partir do próximo ciclo — o scheduler relê o arquivo a cada rodada,
         então não precisa reiniciar nada. Para aplicar na hora, chame run_cycle em
         seguida."""
-        path = Path(config_path)
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        from .config import aplicar_mudancas
 
-        aplicados, recusados = {}, {}
-        for dotted, value in changes.items():
-            if dotted not in SETTABLE:
-                recusados[dotted] = "campo não ajustável"
-                continue
-            node = data
-            parts = dotted.split(".")
-            for p in parts[:-1]:
-                node = node.setdefault(p, {})
-            node[parts[-1]] = value
-            aplicados[dotted] = value
-
-        if aplicados:
-            # Valida antes de gravar: config quebrada derruba o scheduler no próximo ciclo.
-            from .config import Config
-            try:
-                Config(**data)
-            except Exception as e:  # noqa: BLE001
-                return {"erro": f"configuração inválida, nada foi gravado: {e}"}
-            path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
-                            encoding="utf-8")
+        r = aplicar_mudancas(config_path, changes)
+        if r.get("aplicados"):
             orch.reload_config()
-
-        return {"aplicados": aplicados, "recusados": recusados,
-                "vale_a_partir_de": "próximo ciclo"}
+        r["vale_a_partir_de"] = "próximo ciclo"
+        return r
 
     @mcp.tool(annotations=_anotacoes("Ajustar filtros de busca", **ESCRITA))
     def ajustar_busca(

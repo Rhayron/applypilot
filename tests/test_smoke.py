@@ -220,6 +220,42 @@ def test_slug_nao_cria_subdiretorio():
     assert sanitizar_slug("///") == "curriculo"
 
 
+def test_aplicar_mudancas_respeita_whitelist(tmp_path):
+    import yaml as _yaml
+
+    from autoapply.config import aplicar_mudancas
+
+    p = tmp_path / "config.yaml"
+    p.write_text(_yaml.safe_dump({
+        "mode": "review",
+        "search": {"locations": ["Brazil"], "titles": ["Dev"]},
+        "output": {"dir": "out", "db_path": "autoapply.db"},
+    }), encoding="utf-8")
+
+    r = aplicar_mudancas(p, {"search.locations": ["Curitiba"],
+                             "output.db_path": "/tmp/invadido.db"})
+    assert r["aplicados"] == {"search.locations": ["Curitiba"]}
+    assert "output.db_path" in r["recusados"]
+
+    d = _yaml.safe_load(p.read_text(encoding="utf-8"))
+    assert d["search"]["locations"] == ["Curitiba"]
+    assert d["output"]["db_path"] == "autoapply.db"   # intacto
+
+
+def test_aplicar_mudancas_nao_grava_config_invalida(tmp_path):
+    import yaml as _yaml
+
+    from autoapply.config import aplicar_mudancas
+
+    p = tmp_path / "config.yaml"
+    original = {"mode": "review", "search": {"max_age_days": 7}}
+    p.write_text(_yaml.safe_dump(original), encoding="utf-8")
+
+    r = aplicar_mudancas(p, {"search.max_age_days": "isso não é número"})
+    assert "erro" in r and not r["aplicados"]
+    assert _yaml.safe_load(p.read_text(encoding="utf-8")) == original
+
+
 def test_render_resume(tmp_path):
     html, pdf = render_resume(RESUME, tmp_path, "teste")
     content = html.read_text(encoding="utf-8")
