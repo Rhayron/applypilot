@@ -134,12 +134,18 @@ def validar(origem: Path, destino: Path) -> list[str]:
     if tit_a != tit_b:
         problemas.append(f"seções mudaram: {tit_a} -> {tit_b}")
 
-    texto = _texto_completo(destino)
-    achados = [c for c in TRAVESSOES if c in texto]
-    if achados:
-        problemas.append(f"travessão no texto: {achados}")
+    # Travessão e clichê só contam quando a edição os INTRODUZIU. O currículo base
+    # usa meia-risca nas datas ("Jan. 2025 – Atualmente"): é a formatação do usuário,
+    # não marca de LLM, e reprovar por isso descartaria adaptação boa.
+    antes = {p["i"]: p["texto"] for p in esboco(origem)}
+    novos = [p["texto"] for p in esboco(destino) if antes.get(p["i"]) != p["texto"]]
+    texto_novo = "\n".join(novos)
 
-    minusculo = texto.lower()
+    achados = [c for c in TRAVESSOES if c in texto_novo]
+    if achados:
+        problemas.append(f"travessão introduzido: {achados}")
+
+    minusculo = texto_novo.lower()
     cliches = [c for c in CLICHES if c in minusculo]
     if cliches:
         problemas.append(f"clichê de LLM: {cliches[:5]}")
@@ -153,9 +159,13 @@ def validar(origem: Path, destino: Path) -> list[str]:
 
 
 def limpar_texto(texto: str) -> str:
-    """Remove as marcas mecânicas de LLM que dá para corrigir sem reescrever."""
-    texto = re.sub(r"\s*[—―]\s*", ", ", texto)   # travessão vira vírgula
-    texto = texto.replace("–", "-")                    # meia-risca vira hífen
+    """Remove as marcas mecânicas de LLM que dá para corrigir sem reescrever.
+
+    A meia-risca entre números fica: é o intervalo de datas do currículo original
+    ("Jan. 2025 – Atualmente"). Só o uso como travessão de prosa é convertido.
+    """
+    texto = re.sub(r"\s*[—―]\s*", ", ", texto)
+    texto = re.sub(r"(?<![0-9])\s+–\s+(?![0-9])", ", ", texto)
     texto = re.sub(r"\s+([,.;:])", r"\1", texto)
     return re.sub(r"[ \t]{2,}", " ", texto).strip()
 
