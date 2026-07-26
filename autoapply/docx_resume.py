@@ -213,8 +213,10 @@ def _editar_com_claude(base: Path, saida: Path, vaga_txt: str) -> ResultadoAdapt
             # Editar .docx exige rodar python-docx, ou seja a ferramenta Bash — que
             # acceptEdits não libera: o agente terminava sem tocar no arquivo. O
             # sandbox aqui é o diretório temporário com uma cópia isolada, dentro do
-            # container, então liberar é contido.
-            "--permission-mode", "bypassPermissions",
+            # container. Liberar as ferramentas nominalmente em vez de desligar o
+            # sistema de permissões, que o CLI recusa quando o processo é root.
+            "--permission-mode", "acceptEdits",
+            "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep",
             "--add-dir", str(trabalho),
         ]
         proc = subprocess.run(cmd, cwd=trabalho, capture_output=True, text=True,
