@@ -325,6 +325,41 @@ def test_sem_presencial_em_modo_remoto_corta_todo_presencial():
     assert not f._passes_filters(_vaga_em(False, "Curitiba, PR"))
 
 
+def test_todo_modulo_importa():
+    """Rede contra erro de sintaxe em módulo que nenhum teste importa.
+
+    telegram_bot e mcp_server não eram tocados por teste nenhum, então um
+    SyntaxError neles passava pelo pytest limpo e só aparecia no boot do
+    container, em produção. Aconteceu.
+    """
+    import importlib
+    import pkgutil
+
+    import autoapply
+
+    faltando = []
+    for m in pkgutil.walk_packages(autoapply.__path__, "autoapply."):
+        try:
+            importlib.import_module(m.name)
+        except SyntaxError:
+            raise
+        except ImportError as e:      # dependência opcional ausente é aceitável
+            faltando.append(f"{m.name}: {e}")
+    print("dependências opcionais ausentes:", faltando)
+
+
+def test_resumo_filtros_renderiza():
+    from autoapply.config import SearchConfig
+    from autoapply.telegram_bot import _resumo_filtros
+
+    s = SearchConfig(titles=["Dev"], keywords=["python"], modalidade="remoto",
+                     presencial_em=["Curitiba"])
+    txt = _resumo_filtros(s)
+    assert "Curitiba" in txt and "remoto" in txt
+    # sem a exceção, a linha não aparece
+    assert "Presencial também em" not in _resumo_filtros(SearchConfig())
+
+
 def test_render_resume(tmp_path):
     html, pdf = render_resume(RESUME, tmp_path, "teste")
     content = html.read_text(encoding="utf-8")

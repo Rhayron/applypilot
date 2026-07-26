@@ -166,19 +166,26 @@ def _lista(texto: str) -> list[str]:
 
 
 def _resumo_filtros(s) -> str:
-    return (
-        f"🔎 <b>Filtros atuais</b>\n\n"
-        f"<b>Títulos</b> ({len(s.titles)}): {', '.join(s.titles) or '—'}\n\n"
-        f"<b>Palavras</b> ({len(s.keywords)}): {', '.join(s.keywords) or '—'}\n\n"
-        f"<b>Locais</b>: {', '.join(s.locations) or 'qualquer lugar'}\n"
-        f"<b>Modalidade</b>: {s.modo.value}"
-        f"{' (remoto + presencial)' if s.modo.value == 'ambos' else ''}\n"
-        + (f"<b>Presencial também em</b>: {', '.join(s.presencial_em)}\n"
-           if s.presencial_em else "")
-        f"<b>Idade máxima</b>: {s.max_age_days} dias\n"
-        f"<b>Intervalo</b>: {s.interval_minutes} min\n\n"
-        f"<i>/help mostra como mudar cada um.</i>"
-    )
+    extra = " (remoto + presencial)" if s.modo.value == "ambos" else ""
+    linhas = [
+        "🔎 <b>Filtros atuais</b>",
+        "",
+        f"<b>Títulos</b> ({len(s.titles)}): {', '.join(s.titles) or '—'}",
+        "",
+        f"<b>Palavras</b> ({len(s.keywords)}): {', '.join(s.keywords) or '—'}",
+        "",
+        f"<b>Locais</b>: {', '.join(s.locations) or 'qualquer lugar'}",
+        f"<b>Modalidade</b>: {s.modo.value}{extra}",
+    ]
+    if s.presencial_em:
+        linhas.append(f"<b>Presencial também em</b>: {', '.join(s.presencial_em)}")
+    linhas += [
+        f"<b>Idade máxima</b>: {s.max_age_days} dias",
+        f"<b>Intervalo</b>: {s.interval_minutes} min",
+        "",
+        "<i>/help mostra como mudar cada um.</i>",
+    ]
+    return "\n".join(linhas)
 
 
 async def cmd_filtros(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
