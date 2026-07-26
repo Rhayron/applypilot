@@ -219,9 +219,18 @@ class Orchestrator:
                 log.info("CV adaptado via docx por %s (%d edições, %s)",
                          r.editor, r.edicoes, r.idioma)
                 return (pdf or r.caminho), {}, "", mudancas
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 log.exception("Adaptação via .docx falhou; usando o template antigo")
+                aviso = ("⚠️ ATENÇÃO: não consegui editar o seu .docx "
+                         f"({type(e).__name__}). Este currículo foi MONTADO DO ZERO a "
+                         "partir do perfil, então não tem a formatação do seu arquivo. "
+                         "Confira antes de enviar.\n\n")
+                app = tailor(self.llm, job, self.resume, self.context)
+                html_path, pdf_path = render_resume(app.resume_json, self.cfg.out_dir, slug)
+                return ((pdf_path or html_path), app.resume_json, app.cover_letter,
+                        aviso + app.changes_summary)
 
+        # Sem .docx base configurado: caminho antigo, e isso é esperado.
         app = tailor(self.llm, job, self.resume, self.context)
         html_path, pdf_path = render_resume(app.resume_json, self.cfg.out_dir, slug)
         return (pdf_path or html_path), app.resume_json, app.cover_letter, app.changes_summary
