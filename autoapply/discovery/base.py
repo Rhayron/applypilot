@@ -56,14 +56,40 @@ class JobSource(abc.ABC):
                 posted = posted.replace(tzinfo=timezone.utc)
             if posted < datetime.now(timezone.utc) - timedelta(days=s.max_age_days):
                 return False
-        hay = f"{job.title} {job.description}".lower()
-        if s.titles and not any(t.lower() in job.title.lower() for t in s.titles):
-            # título não bate; ainda aceita se alguma keyword forte aparecer no título
-            if not any(k.lower() in job.title.lower() for k in s.keywords):
+
+        titulo = job.title.lower()
+        corpo = f"{job.title} {job.description}".lower()
+        if s.titles and not any(t.lower() in titulo for t in s.titles):
+            # Título não bate. Ainda aceita se alguma keyword aparecer, e aqui vale o
+            # corpo da vaga: termos de nicho ("firmware embarcado", "visão
+            # computacional") costumam estar na descrição, não no título, que muitas
+            # vezes é só "Software Engineer".
+            if not any(k.lower() in corpo for k in s.keywords):
                 return False
+
+        # Filtro de localidade. Estava declarado no config e não era aplicado em lugar
+        # nenhum: `locations` só alimentava a query do LinkedIn, então pedir uma
+        # cidade específica não tinha efeito sobre as outras fontes.
+        if s.locations and not self._bate_local(job, s.locations):
+            return False
+
         if s.remote_only and job.remote is False:
             return False
         return True
+
+    @staticmethod
+    def _bate_local(job: Job, locais: list[str]) -> bool:
+        """A vaga é de algum dos lugares pedidos?
+
+        Procura no campo de local e também no texto, porque vaga remota costuma
+        trazer a cidade só no corpo ("Remote, based in Curitiba"). Quando não há
+        nenhuma informação de lugar, mantém a vaga: descartar em silêncio o que não
+        dá para avaliar esconderia vaga boa.
+        """
+        alvo = f"{job.location} {job.title} {job.description}".strip().lower()
+        if not alvo:
+            return True
+        return any(local.lower().strip() in alvo for local in locais if local.strip())
 
 
 def strip_html(text: str) -> str:

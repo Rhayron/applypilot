@@ -156,6 +156,59 @@ def test_idioma_texto_curto_fica_em_portugues():
     assert detectar_idioma("Backend Engineer", "") == "pt"
 
 
+def _fonte(**busca):
+    """Fonte mínima só para exercitar _passes_filters."""
+    from autoapply.config import Config, SearchConfig
+    from autoapply.discovery.base import JobSource
+
+    class Fake(JobSource):
+        name = "fake"
+
+        def fetch(self):
+            return []
+
+    cfg = Config(search=SearchConfig(**busca))
+    return Fake(cfg)
+
+
+def test_filtro_de_local_e_aplicado():
+    """locations existia no config e não filtrava nada: só alimentava o LinkedIn."""
+    f = _fonte(titles=["Software Engineer"], locations=["Curitiba"])
+    curitiba = Job(source="x", external_id="1", title="Software Engineer",
+                   company="ACME", location="Curitiba, PR", url="http://x")
+    recife = Job(source="x", external_id="2", title="Software Engineer",
+                 company="ACME", location="Recife, PE", url="http://y")
+    assert f._passes_filters(curitiba)
+    assert not f._passes_filters(recife)
+
+
+def test_local_no_corpo_da_vaga_conta():
+    f = _fonte(titles=["Software Engineer"], locations=["Curitiba"])
+    remota = Job(source="x", external_id="3", title="Software Engineer", company="ACME",
+                 location="", url="http://z",
+                 description="Remote role, team based in Curitiba.")
+    assert f._passes_filters(remota)
+
+
+def test_sem_filtro_de_local_passa_qualquer_lugar():
+    f = _fonte(titles=["Software Engineer"])
+    j = Job(source="x", external_id="4", title="Software Engineer", company="ACME",
+            location="Recife, PE", url="http://w")
+    assert f._passes_filters(j)
+
+
+def test_keyword_de_nicho_bate_na_descricao():
+    """Título genérico + termo de nicho no corpo: o caso de 'firmware embarcado'."""
+    f = _fonte(titles=["Firmware Engineer"], keywords=["firmware embarcado"])
+    j = Job(source="x", external_id="5", title="Software Engineer", company="ACME",
+            url="http://x", description="Vaga para atuar com firmware embarcado em ARM.")
+    assert f._passes_filters(j)
+
+    fora = Job(source="x", external_id="6", title="Software Engineer", company="ACME",
+               url="http://y", description="Vaga de marketing digital.")
+    assert not f._passes_filters(fora)
+
+
 def test_render_resume(tmp_path):
     html, pdf = render_resume(RESUME, tmp_path, "teste")
     content = html.read_text(encoding="utf-8")

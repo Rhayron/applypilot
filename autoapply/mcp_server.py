@@ -265,6 +265,81 @@ def build_server(config_path: str):
                 "vale_a_partir_de": "próximo ciclo"}
 
     @mcp.tool()
+    def ajustar_busca(
+        adicionar_titulos: Optional[list[str]] = None,
+        remover_titulos: Optional[list[str]] = None,
+        adicionar_palavras: Optional[list[str]] = None,
+        remover_palavras: Optional[list[str]] = None,
+        locais: Optional[list[str]] = None,
+        somente_remoto: Optional[bool] = None,
+        dias_maximos: Optional[int] = None,
+    ) -> dict:
+        """Ajusta os filtros de busca de vaga, somando ou tirando itens.
+
+        É a ferramenta para pedidos em linguagem natural do usuário. Exemplos:
+        - "procure vagas só em Curitiba"     -> locais=["Curitiba"]
+        - "quero vagas de firmware embarcado" ->
+              adicionar_titulos=["Firmware", "Embedded", "Engenheiro de Software
+              Embarcado"], adicionar_palavras=["firmware", "embarcado", "rtos",
+              "microcontrolador", "c/c++"]
+        - "volta a aceitar de qualquer lugar" -> locais=[]
+
+        Como funciona a filtragem, para você escolher bem os termos: uma vaga entra
+        se o TÍTULO contém algum de `titulos`, ou se o título OU a descrição contêm
+        alguma de `palavras`. Então ponha em `titulos` o que costuma aparecer no nome
+        do cargo, e em `palavras` os termos de nicho que aparecem no corpo do anúncio.
+        `locais` casa contra local, título e descrição; lista vazia remove o filtro.
+
+        Ao atender um pedido amplo ("e afins"), inclua você mesmo as variações
+        equivalentes, inclusive em inglês, já que boa parte das fontes publica assim.
+        Os campos não informados ficam como estão.
+        """
+        atual = orch.cfg.search
+        titulos = list(atual.titles)
+        palavras = list(atual.keywords)
+
+        def _fora(lista: list[str], remover: list[str]) -> list[str]:
+            alvo = {r.strip().lower() for r in remover}
+            return [x for x in lista if x.strip().lower() not in alvo]
+
+        def _dentro(lista: list[str], somar: list[str]) -> list[str]:
+            existentes = {x.strip().lower() for x in lista}
+            return lista + [s.strip() for s in somar
+                            if s.strip() and s.strip().lower() not in existentes]
+
+        if remover_titulos:
+            titulos = _fora(titulos, remover_titulos)
+        if adicionar_titulos:
+            titulos = _dentro(titulos, adicionar_titulos)
+        if remover_palavras:
+            palavras = _fora(palavras, remover_palavras)
+        if adicionar_palavras:
+            palavras = _dentro(palavras, adicionar_palavras)
+
+        mudancas: dict[str, Any] = {}
+        if titulos != atual.titles:
+            mudancas["search.titles"] = titulos
+        if palavras != atual.keywords:
+            mudancas["search.keywords"] = palavras
+        if locais is not None:
+            mudancas["search.locations"] = [x.strip() for x in locais if x.strip()]
+        if somente_remoto is not None:
+            mudancas["search.remote_only"] = somente_remoto
+        if dias_maximos is not None:
+            mudancas["search.max_age_days"] = dias_maximos
+
+        if not mudancas:
+            return {"aviso": "nada mudou", "busca_atual": orch.cfg.search.model_dump()}
+
+        resultado = set_config(mudancas)
+        resultado["busca_atual"] = orch.cfg.search.model_dump()
+        resultado["observacao"] = (
+            "Vale no próximo ciclo. Para valer agora, chame run_cycle. "
+            "Filtro novo não reavalia vaga já vista."
+        )
+        return resultado
+
+    @mcp.tool()
     def reject_job(uid: str) -> dict:
         """Marca uma vaga como descartada pelo usuário. Ela sai da fila de revisão e
         não volta a aparecer."""
