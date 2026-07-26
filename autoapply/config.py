@@ -46,6 +46,10 @@ class SearchConfig(BaseModel):
     locations: list[str] = Field(default_factory=list)
     remote_only: bool = False
     modalidade: Optional[Modalidade] = None
+    # Cidades onde presencial também serve, mesmo com modalidade=remoto. É o caso
+    # "remoto em qualquer lugar, e presencial só onde eu moro": uma regra por lugar,
+    # que não cabe num campo plano de modalidade.
+    presencial_em: list[str] = Field(default_factory=list)
     max_age_days: int = 7
 
     @property
@@ -159,6 +163,7 @@ SETTABLE = (
     "search.locations",
     "search.remote_only",
     "search.modalidade",
+    "search.presencial_em",
     "search.max_age_days",
     "limits.max_applications_per_day",
     "limits.min_seconds_between_applications",

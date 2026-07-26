@@ -79,9 +79,13 @@ class JobSource(abc.ABC):
         from ..config import Modalidade
 
         modo = s.modo
-        if modo is Modalidade.REMOTO and job.remote is False:
-            return False
-        if modo is Modalidade.PRESENCIAL and job.remote is True:
+        if job.remote is False:
+            # Presencial: passa se a modalidade aceita, ou se está numa das cidades
+            # onde você topa ir ao escritório. Sem lista, não há exceção a avaliar.
+            if modo is Modalidade.REMOTO:
+                if not s.presencial_em or not self._bate_local(job, s.presencial_em):
+                    return False
+        elif job.remote is True and modo is Modalidade.PRESENCIAL:
             return False
         return True
 

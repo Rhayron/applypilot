@@ -80,6 +80,8 @@ Sem argumento, mostra os filtros atuais. Para mudar:
 <code>/filtros modalidade remoto</code>      só vaga remota
 <code>/filtros modalidade presencial</code>  só vaga presencial
 <code>/filtros modalidade ambos</code>       híbrido: aceita as duas
+<code>/filtros presencial-em Curitiba</code>  presencial só nessas cidades
+<code>/filtros presencial-em -</code>         remove a exceção
 <code>/filtros dias 14</code>     (idade máxima da vaga)
 <code>/filtros intervalo 120</code> (minutos entre ciclos)
 <code>/filtros corte 70</code>    (nota mínima para me avisar)
@@ -96,6 +98,14 @@ Uma vaga entra se bate um titulo <i>ou</i> uma palavra.
 • <code>ambos</code> + local → pega presencial na cidade e remoto que a mencione.
 Vaga que não informa a modalidade sempre passa, porque a maioria das fontes omite
 e descartar por omissão jogaria fora quase tudo.
+
+<b>Modo prioridade</b> — remoto em qualquer lugar, presencial só onde você mora:
+<code>/filtros modalidade remoto</code>
+<code>/filtros presencial-em Curitiba</code>
+<code>/filtros local -</code>
+A regra fica: vaga remota entra venha de onde vier; vaga presencial só entra se
+for em Curitiba. Deixe <code>local</code> vazio, senão ele corta as remotas de
+fora também.
 
 Mudança vale no próximo ciclo e não reavalia vaga já vista."""
 
@@ -163,6 +173,8 @@ def _resumo_filtros(s) -> str:
         f"<b>Locais</b>: {', '.join(s.locations) or 'qualquer lugar'}\n"
         f"<b>Modalidade</b>: {s.modo.value}"
         f"{' (remoto + presencial)' if s.modo.value == 'ambos' else ''}\n"
+        + (f"<b>Presencial também em</b>: {', '.join(s.presencial_em)}\n"
+           if s.presencial_em else "")
         f"<b>Idade máxima</b>: {s.max_age_days} dias\n"
         f"<b>Intervalo</b>: {s.interval_minutes} min\n\n"
         f"<i>/help mostra como mudar cada um.</i>"
@@ -187,6 +199,8 @@ async def cmd_filtros(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     if acao == "local":
         mudancas["search.locations"] = [] if valor in ("-", "") else _lista(valor)
+    elif acao in ("presencial-em", "presencialem", "escritorio", "escritório"):
+        mudancas["search.presencial_em"] = [] if valor in ("-", "") else _lista(valor)
     elif acao in ("+titulo", "+título"):
         atuais = {t.lower() for t in s.titles}
         mudancas["search.titles"] = s.titles + [

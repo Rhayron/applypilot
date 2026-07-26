@@ -292,6 +292,39 @@ def test_config_antiga_sem_modalidade_continua_valendo():
     assert SearchConfig(remote_only=True, modalidade="ambos").modo is Modalidade.AMBOS
 
 
+def _vaga_em(remote, local, descricao=""):
+    return Job(source="x", external_id=f"{remote}{local}", title="Software Engineer",
+               company="ACME", url="http://x", remote=remote, location=local,
+               description=descricao)
+
+
+def test_modo_prioridade_remoto_fora_presencial_em_curitiba():
+    """O caso pedido: remoto de qualquer lugar, presencial só em Curitiba."""
+    f = _fonte(titles=["Software Engineer"], modalidade="remoto",
+               presencial_em=["Curitiba"])
+
+    # remota entra venha de onde vier
+    assert f._passes_filters(_vaga_em(True, "São Paulo, SP"))
+    assert f._passes_filters(_vaga_em(True, "Remote - US"))
+    # presencial em Curitiba entra
+    assert f._passes_filters(_vaga_em(False, "Curitiba, PR"))
+    # presencial em outro lugar não
+    assert not f._passes_filters(_vaga_em(False, "São Paulo, SP"))
+    assert not f._passes_filters(_vaga_em(False, "Recife, PE"))
+
+
+def test_presencial_em_reconhece_cidade_no_corpo():
+    f = _fonte(titles=["Software Engineer"], modalidade="remoto",
+               presencial_em=["Curitiba"])
+    assert f._passes_filters(
+        _vaga_em(False, "", "Vaga presencial, escritório em Curitiba, PR."))
+
+
+def test_sem_presencial_em_modo_remoto_corta_todo_presencial():
+    f = _fonte(titles=["Software Engineer"], modalidade="remoto")
+    assert not f._passes_filters(_vaga_em(False, "Curitiba, PR"))
+
+
 def test_render_resume(tmp_path):
     html, pdf = render_resume(RESUME, tmp_path, "teste")
     content = html.read_text(encoding="utf-8")
