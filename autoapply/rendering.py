@@ -12,6 +12,16 @@ log = logging.getLogger(__name__)
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def sanitizar_slug(slug: str) -> str:
+    """Nome de arquivo seguro a partir de empresa + título da vaga.
+
+    Título real traz barra e pipe ("AI/ML Backend Software Engineer | Senior"). Sem
+    isto a barra vira separador de diretório: o arquivo some numa subpasta criada
+    sozinha e o PDF sai com nome quebrado.
+    """
+    return re.sub(r"[^a-zA-Z0-9_-]+", "-", slug).strip("-")[:80] or "curriculo"
+
+
 def docx_para_pdf(docx_path: Path, out_dir: Path) -> Path | None:
     """Converte o .docx em PDF pelo LibreOffice headless.
 
@@ -49,7 +59,7 @@ def render_resume(resume: dict, out_dir: Path, slug: str) -> tuple[Path, Path | 
     )
     html = env.get_template("resume.html.j2").render(r=resume)
 
-    slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", slug)[:80]
+    slug = sanitizar_slug(slug)
     out_dir.mkdir(parents=True, exist_ok=True)
     html_path = out_dir / f"{slug}.html"
     html_path.write_text(html, encoding="utf-8")

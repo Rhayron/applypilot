@@ -209,6 +209,17 @@ def test_keyword_de_nicho_bate_na_descricao():
     assert not f._passes_filters(fora)
 
 
+def test_slug_nao_cria_subdiretorio():
+    """Título real tem barra: 'AI/ML Backend Software Engineer | Senior (Remote)'."""
+    from autoapply.rendering import sanitizar_slug
+
+    s = sanitizar_slug("Compass UOL-AI/ML Backend Software Engineer | Senior (Remote)-23bcdd")
+    assert "/" not in s and "\\" not in s and "|" not in s
+    assert not s.startswith("-") and not s.endswith("-")
+    assert len(s) <= 80
+    assert sanitizar_slug("///") == "curriculo"
+
+
 def test_render_resume(tmp_path):
     html, pdf = render_resume(RESUME, tmp_path, "teste")
     content = html.read_text(encoding="utf-8")

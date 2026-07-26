@@ -15,7 +15,7 @@ from .llm import LLM
 from .matching import score_job
 from .models import ApplicationStatus, Job, Mode
 from .notify import TelegramNotifier
-from .rendering import docx_para_pdf, render_resume
+from .rendering import docx_para_pdf, render_resume, sanitizar_slug
 from .tailoring import tailor
 
 log = logging.getLogger(__name__)
@@ -208,7 +208,7 @@ class Orchestrator:
             try:
                 from .docx_resume import adaptar
 
-                destino = self.cfg.out_dir / f"{slug}.docx"
+                destino = self.cfg.out_dir / f"{sanitizar_slug(slug)}.docx"
                 r = adaptar(job, base, destino, llm=self.llm, editor=editor)
                 pdf = docx_para_pdf(r.caminho, self.cfg.out_dir)
                 mudancas = r.resumo or f"{r.edicoes} trechos ajustados para a vaga."
