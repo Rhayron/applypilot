@@ -89,21 +89,28 @@ class TelegramNotifier:
             self.send_document(Path(resume_file), caption=f"CV adaptado — {job_row['title']}")
 
     def vaga_encontrada(self, job_row) -> None:
-        """Vaga passou no corte, currículo ainda NÃO foi gerado.
+        """Primeiro portão: vaga passou no corte, currículo ainda NÃO foi gerado.
 
-        É o ponto onde o fluxo espera sua decisão. Sem botão inline aqui de
-        propósito: quem escuta este bot é o gateway do Hermes, e é com ele que você
-        responde — os botões de confirmar aparecem quando ele vai executar a ação.
+        Os botões só funcionam com o bot próprio fazendo polling (telegram.bot=true).
+        Sem ele, cai para instrução em texto.
         """
-        self.send(
+        uid = job_row["uid"]
+        texto = (
             f"🔎 <b>Vaga encontrada</b> — score <b>{job_row['score']}</b>/100\n"
             f"<b>{_esc(job_row['title'])}</b> @ {_esc(job_row['company'])}\n"
             f"📍 {_esc(job_row['location'] or 'n/d')}\n"
             f"🔗 {_esc(job_row['url'])}\n\n"
-            f"<i>{_esc((job_row['score_reasoning'] or '')[:500])}</i>\n\n"
-            f"<code>{_esc(job_row['uid'])}</code>\n"
-            f"💬 Gero o currículo com <b>Claude</b> ou <b>Gemini</b>? Ou descarto?"
+            f"<i>{_esc((job_row['score_reasoning'] or '')[:500])}</i>"
         )
+        if self.interactive:
+            self.send(texto + "\n\n👇 Gerar o currículo adaptado?", [[
+                {"text": "🤖 Claude", "callback_data": f"gen_claude:{uid}"},
+                {"text": "⚡ Gemini", "callback_data": f"gen_gemini:{uid}"},
+                {"text": "❌ Descartar", "callback_data": f"reject:{uid}"},
+            ]])
+        else:
+            self.send(f"{texto}\n\n<code>{_esc(uid)}</code>\n"
+                      "💬 Gero o currículo com <b>Claude</b> ou <b>Gemini</b>?")
 
     def failure_alert(self, job_row, reason: str, resume_file: Optional[Path]) -> None:
         text = (

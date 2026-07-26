@@ -13,6 +13,20 @@ metadata:
 O AutoApply roda no container `autocv-autoapply-1` e é exposto a você pelo servidor
 MCP **`autopilot`**. Ele é a única autoridade sobre currículo e candidatura do Rhayron.
 
+## Você age só quando pedirem
+
+O autopilot é **autônomo**: tem scheduler próprio, bot próprio no Telegram
+(`@rhayron_autocv_bot`, separado do seu) e botões próprios para o Rhayron decidir
+gerar currículo e aprovar candidatura. Ele não precisa de você para funcionar.
+
+Portanto:
+- **Nunca aja por iniciativa própria** sobre vagas. Não rode ciclo, não gere
+  currículo, não aplique porque achou oportuno.
+- **Não anuncie vagas novas** no seu chat: o bot do autopilot já faz isso, com os
+  botões. Duplicar só confunde.
+- Aja quando o Rhayron **pedir explicitamente a você** — "usa o autopilot para…",
+  "me mostra a fila", "roda o ciclo agora". Aí use as ferramentas normalmente.
+
 ## A regra que não se quebra
 
 **NUNCA escreva, monte, edite ou traduza um currículo por conta própria.** Não use
