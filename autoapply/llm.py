@@ -21,6 +21,16 @@ _ORIENTACAO_SAMPLING = (
 )
 
 
+_TRANSITORIOS = ("timeout", "connection", "overloaded", "unavailable",
+                 "ratelimit", "rate_limit", "429", "500", "502", "503", "504")
+
+
+def _transitorio(e: Exception) -> bool:
+    """Vale a pena tentar de novo? Timeout e indisponibilidade sim; prompt ruim não."""
+    marca = f"{type(e).__name__} {e}".lower()
+    return any(t in marca for t in _TRANSITORIOS)
+
+
 def sampling_via_prompt(model: str) -> bool:
     """O modelo depreciou `temperature`/`top_p`/`top_k`?
 
@@ -34,9 +44,10 @@ def sampling_via_prompt(model: str) -> bool:
 
 
 class LLM:
-    def __init__(self, model: str, temperature: float = 0.3):
+    def __init__(self, model: str, temperature: float = 0.3, timeout: int = 300):
         self.model = model
         self.temperature = temperature
+        self.timeout = timeout
         self._sampling_no_prompt = sampling_via_prompt(model)
 
     def _orientacao(self) -> str:
@@ -63,15 +74,29 @@ class LLM:
             system = f"{system}\n\n{self._orientacao()}"
         else:
             kwargs["temperature"] = self.temperature
-        resp = litellm.completion(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            **kwargs,
-        )
-        return resp.choices[0].message.content or ""
+        # Sem teto de tokens, um pedido grande pode passar do timeout padrão do
+        # cliente HTTP. Sem retry aqui, um ReadTimeout transitório derrubava a vaga
+        # inteira para FAILED — visto na prática ao adaptar currículo.
+        ultimo: Optional[Exception] = None
+        for tentativa in range(3):
+            try:
+                resp = litellm.completion(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    timeout=self.timeout,
+                    **kwargs,
+                )
+                return resp.choices[0].message.content or ""
+            except Exception as e:  # noqa: BLE001
+                if not _transitorio(e):
+                    raise
+                ultimo = e
+                log.warning("Falha transitória no LLM (tentativa %d/3): %s",
+                            tentativa + 1, type(e).__name__)
+        raise RuntimeError(f"LLM inacessível após 3 tentativas: {ultimo}")
 
     def complete_json(self, system: str, user: str, max_tokens: Optional[int] = None,
                       retries: int = 2) -> Any:
