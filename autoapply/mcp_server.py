@@ -66,6 +66,26 @@ def _brief(row) -> dict:
     }
 
 
+def _anotacoes(titulo: str, *, leitura: bool = False, destrutiva: bool = False):
+    """Declara a natureza da ferramenta para o cliente MCP.
+
+    É por aqui que o Hermes distingue uma consulta de uma ação com consequência.
+    Sem isso todas as ferramentas parecem iguais para ele, e não há sinal de que
+    `apply_job` manda uma candidatura de verdade enquanto `status` só lê o banco.
+    """
+    try:
+        from mcp.types import ToolAnnotations
+    except ImportError:  # servidor antigo: seguir sem anotação é melhor que quebrar
+        return None
+    return ToolAnnotations(
+        title=titulo,
+        readOnlyHint=leitura,
+        destructiveHint=destrutiva,
+        idempotentHint=leitura,
+        openWorldHint=not leitura,
+    )
+
+
 def build_server(config_path: str):
     from mcp.server.fastmcp import FastMCP
 
@@ -76,8 +96,12 @@ def build_server(config_path: str):
     orch = Orchestrator(cfg)
     mcp = FastMCP("autopilot")
 
+    LEITURA = dict(leitura=True)
+    ESCRITA = dict(leitura=False)
+    IRREVERSIVEL = dict(leitura=False, destrutiva=True)
+
     # ---------------------------------------------------------------- leitura
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Panorama do autopilot", **LEITURA))
     def status() -> dict:
         """Panorama do autopilot: quantas vagas em cada status, aplicações de hoje
         contra o limite diário, e o modo de operação atual."""
@@ -89,7 +113,7 @@ def build_server(config_path: str):
             "intervalo_minutos": orch.cfg.search.interval_minutes,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Histórico de ciclos", **LEITURA))
     def metrics(limit: int = 10) -> dict:
         """Histórico de ciclos: totais acumulados e os últimos `limit` ciclos."""
         return {
@@ -97,7 +121,7 @@ def build_server(config_path: str):
             "ultimos_ciclos": [dict(r) for r in orch.tracker.cycle_history(limit)],
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Listar vagas", **LEITURA))
     def list_jobs(status: Optional[str] = None, min_score: Optional[int] = None,
                   limit: int = 20) -> list[dict]:
         """Lista vagas, opcionalmente filtrando por status e nota mínima.
@@ -119,7 +143,7 @@ def build_server(config_path: str):
             rows = orch.tracker.conn.execute(sql, params).fetchall()
         return [_brief(r) for r in rows]
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Fila de decisões", **LEITURA))
     def awaiting_decision() -> list[dict]:
         """Vagas esperando decisão do usuário. É a fila para reportar no chat.
 
@@ -145,7 +169,7 @@ def build_server(config_path: str):
             out.append(d)
         return out
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Detalhe da vaga", **LEITURA))
     def job_detail(uid: str) -> dict:
         """Detalhe completo de uma vaga: nota e justificativa, resumo das adaptações,
         cover letter e caminho do PDF. A descrição da vaga vem truncada em 4000
@@ -159,7 +183,7 @@ def build_server(config_path: str):
         d.pop("resume_json", None)  # JSON Resume inteiro não ajuda o agente
         return d
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Ler configuração", **LEITURA))
     def get_config() -> dict:
         """Configuração atual e a lista de campos que podem ser alterados via
         set_config."""
@@ -174,7 +198,7 @@ def build_server(config_path: str):
         }
 
     # ------------------------------------------------------------------ ação
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Rodar um ciclo de busca", **ESCRITA))
     def run_cycle() -> dict:
         """Roda um ciclo agora: descobre vagas, pontua, adapta o CV das aprovadas e
         põe na fila de revisão. Não candidata a nada — em mode=review a decisão final
@@ -188,7 +212,7 @@ def build_server(config_path: str):
                     "detalhe": "um ciclo já está em andamento; tente de novo em instantes"}
         return stats
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Gerar currículo adaptado (gasta LLM)", **ESCRITA))
     def gerar_cv(uid: str, editor: str = "auto") -> dict:
         """Gera o currículo adaptado para uma vaga e manda o PDF no chat.
 
@@ -218,14 +242,14 @@ def build_server(config_path: str):
             "enviado_no_chat": True,
         }
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Adaptar CV para uma URL", **ESCRITA))
     def tailor_url(url: str) -> dict:
         """Adapta o currículo para uma vaga específica a partir da URL dela, fora do
         fluxo de descoberta. Útil quando o usuário manda um link no chat."""
         summary, path = orch.tailor_url(url)
         return {"resumo": summary, "arquivo": str(path) if path else None}
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Alterar configuração", **ESCRITA))
     def set_config(changes: dict) -> dict:
         """Ajusta a configuração do autopilot. Recebe um dict de caminho pontilhado
         para valor, por exemplo {"matching.alert_threshold": 70,
@@ -264,7 +288,7 @@ def build_server(config_path: str):
         return {"aplicados": aplicados, "recusados": recusados,
                 "vale_a_partir_de": "próximo ciclo"}
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Ajustar filtros de busca", **ESCRITA))
     def ajustar_busca(
         adicionar_titulos: Optional[list[str]] = None,
         remover_titulos: Optional[list[str]] = None,
@@ -339,7 +363,7 @@ def build_server(config_path: str):
         )
         return resultado
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("Descartar vaga", **ESCRITA))
     def reject_job(uid: str) -> dict:
         """Marca uma vaga como descartada pelo usuário. Ela sai da fila de revisão e
         não volta a aparecer."""
@@ -349,7 +373,7 @@ def build_server(config_path: str):
         orch.tracker.set_status(uid, ApplicationStatus.REJECTED_BY_USER)
         return {"uid": uid, "status": "rejected_by_user"}
 
-    @mcp.tool()
+    @mcp.tool(annotations=_anotacoes("ENVIAR CANDIDATURA (irreversível)", **IRREVERSIVEL))
     def apply_job(uid: str) -> dict:
         """AÇÃO IRREVERSÍVEL: envia de verdade a candidatura do usuário para esta
         vaga, com o nome e o currículo dele.
