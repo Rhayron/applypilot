@@ -6,6 +6,7 @@ import pytest
 
 from autoapply.config import Config, load_config
 from autoapply.db import Tracker
+from autoapply.llm import LLM, sampling_via_prompt
 from autoapply.models import ApplicationStatus, Job, normalize
 from autoapply.rendering import render_resume
 from autoapply.tailoring import _sanity_check
@@ -104,6 +105,24 @@ def test_migracao_preenche_dedupe_key_em_banco_antigo(tmp_path):
     # e a linha migrada passa a bloquear o repost
     assert t.seen(Job(source="gupy", external_id="99", title="Dev  Pleno",
                       company="Sao Paulo Tech", url="http://x"))
+
+
+def test_sampling_via_prompt_detecta_gemini_3_mais():
+    assert sampling_via_prompt("gemini/gemini-3.6-flash")
+    assert sampling_via_prompt("gemini/gemini-3.5-flash-lite")
+    assert sampling_via_prompt("gemini-4-pro")            # 4 também é "3+"
+    assert not sampling_via_prompt("gemini/gemini-2.0-flash")
+    assert not sampling_via_prompt("anthropic/claude-sonnet-4-5")
+    assert not sampling_via_prompt("openai/gpt-4o")
+
+
+def test_temperatura_vira_orientacao_textual():
+    frio = LLM("gemini/gemini-3.6-flash", temperature=0.3)
+    quente = LLM("gemini/gemini-3.6-flash", temperature=1.2)
+    assert "consistência" in frio._orientacao()
+    assert frio._orientacao() != quente._orientacao()
+    # Modelo antigo continua mandando o parâmetro, não o texto.
+    assert not LLM("gemini/gemini-2.0-flash", temperature=0.3)._sampling_no_prompt
 
 
 def test_render_resume(tmp_path):
