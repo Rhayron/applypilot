@@ -127,6 +127,12 @@ class Orchestrator:
             src = sources.get("linkedin")
             if isinstance(src, LinkedInSource):
                 job.description = src.fetch_description(job)
+                # add_job() já gravou a linha com a descrição vazia e nada a regravava:
+                # o banco ficava sem o texto da vaga para toda fonte que busca a
+                # descrição tarde. Isso cega o job_detail do Hermes e a detecção de
+                # idioma de qualquer reprocessamento.
+                if job.description:
+                    self.tracker.set_description(job.uid, job.description)
 
         # 1) scoring (modelo barato)
         match = score_job(self.scoring_llm, job, self.resume, self.context)

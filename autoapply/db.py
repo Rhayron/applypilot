@@ -133,6 +133,15 @@ class Tracker:
             self.conn.execute(f"UPDATE jobs SET {', '.join(cols)} WHERE uid=?", vals)
             self.conn.commit()
 
+    def set_description(self, uid: str, description: str) -> None:
+        """Grava a descrição buscada depois da inserção (caso do LinkedIn)."""
+        with self._lock:
+            self.conn.execute(
+                "UPDATE jobs SET description=?, updated_at=datetime('now') WHERE uid=?",
+                (description, uid),
+            )
+            self.conn.commit()
+
     def get(self, uid: str) -> Optional[sqlite3.Row]:
         with self._lock:
             return self.conn.execute("SELECT * FROM jobs WHERE uid=?", (uid,)).fetchone()
