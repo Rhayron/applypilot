@@ -188,9 +188,12 @@ class Orchestrator:
                 r = adaptar(job, base, destino, llm=self.llm)
                 pdf = docx_para_pdf(r.caminho, self.cfg.out_dir)
                 mudancas = r.resumo or f"{r.edicoes} trechos ajustados para a vaga."
+                if r.idioma == "en":
+                    mudancas = "Vaga em inglês: currículo traduzido.\n\n" + mudancas
                 if r.avisos:
                     mudancas += f"\n\n(ressalvas: {'; '.join(r.avisos)})"
-                log.info("CV adaptado via docx por %s (%d edições)", r.editor, r.edicoes)
+                log.info("CV adaptado via docx por %s (%d edições, %s)",
+                         r.editor, r.edicoes, r.idioma)
                 return (pdf or r.caminho), {}, "", mudancas
             except Exception:  # noqa: BLE001
                 log.exception("Adaptação via .docx falhou; usando o template antigo")

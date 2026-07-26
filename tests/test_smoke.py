@@ -6,6 +6,7 @@ import pytest
 
 from autoapply.config import Config, load_config
 from autoapply.db import Tracker
+from autoapply.idioma import detectar as detectar_idioma
 from autoapply.llm import LLM, sampling_via_prompt
 from autoapply.models import ApplicationStatus, Job, normalize
 from autoapply.rendering import render_resume
@@ -123,6 +124,36 @@ def test_temperatura_vira_orientacao_textual():
     assert frio._orientacao() != quente._orientacao()
     # Modelo antigo continua mandando o parâmetro, não o texto.
     assert not LLM("gemini/gemini-2.0-flash", temperature=0.3)._sampling_no_prompt
+
+
+def test_deteccao_de_idioma():
+    en = ("Senior Backend Engineer",
+          "We are looking for a candidate with strong experience in Python and "
+          "distributed systems. You will join our team and work on the API that "
+          "powers our product. Requirements: 5 years of experience with backend "
+          "development, and a solid understanding of databases.")
+    pt = ("Pessoa Desenvolvedora Backend Sênior",
+          "Buscamos uma pessoa com experiência sólida em Python e sistemas "
+          "distribuídos. Você vai atuar na nossa equipe e trabalhar na API do "
+          "produto. Requisitos: 5 anos de experiência com desenvolvimento backend "
+          "e bom conhecimento de bancos de dados. É desejável conhecer Docker.")
+    assert detectar_idioma(*en) == "en"
+    assert detectar_idioma(*pt) == "pt"
+
+
+def test_idioma_ignora_jargao_tecnico():
+    """Stack é igual nos dois idiomas: não pode decidir sozinha o resultado."""
+    pt = ("Desenvolvedor Python",
+          "Vaga para atuar com Python, Docker, Kubernetes, FastAPI, PostgreSQL, "
+          "React, AWS Lambda e Terraform. Requisitos: experiência com "
+          "desenvolvimento de APIs, conhecimento de bancos de dados e que você "
+          "saiba trabalhar em equipe na nossa empresa.")
+    assert detectar_idioma(*pt) == "pt"
+
+
+def test_idioma_texto_curto_fica_em_portugues():
+    # Sem sinal suficiente, o conservador é não traduzir: o currículo base é PT.
+    assert detectar_idioma("Backend Engineer", "") == "pt"
 
 
 def test_render_resume(tmp_path):
