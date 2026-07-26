@@ -176,9 +176,8 @@ def validar(origem: Path, destino: Path, traduzido: bool = False) -> list[str]:
     novos = [p["texto"] for p in esboco(destino) if antes.get(p["i"]) != p["texto"]]
     texto_novo = "\n".join(novos)
 
-    achados = [c for c in TRAVESSOES if c in texto_novo]
-    if achados:
-        problemas.append(f"travessão introduzido: {achados}")
+    if _travessao_de_prosa(texto_novo):
+        problemas.append("travessão introduzido na prosa")
 
     minusculo = texto_novo.lower()
     vocabulario = CLICHES_EN if traduzido else CLICHES
@@ -192,6 +191,18 @@ def validar(origem: Path, destino: Path, traduzido: bool = False) -> list[str]:
             problemas.append(f"perdeu conteúdo essencial: {obrigatorio!r}")
 
     return problemas
+
+
+def _travessao_de_prosa(texto: str) -> bool:
+    """Há travessão usado como pontuação, e não como intervalo de datas?
+
+    A distinção importa porque o currículo escreve "Mar. 2023 – Atualmente": tratar
+    toda meia-risca como marca de LLM reprovava adaptação boa, e na tradução isso
+    acontecia sempre, já que as linhas de data também são reescritas.
+    """
+    if any(c in texto for c in "—―"):
+        return True
+    return bool(re.search(r"(?<![0-9])\s+–\s+(?![0-9])", texto))
 
 
 def limpar_texto(texto: str) -> str:
