@@ -15,7 +15,7 @@ from .llm import LLM
 from .matching import score_job
 from .models import ApplicationStatus, Job, Mode
 from .notify import TelegramNotifier
-from .rendering import render_resume
+from .rendering import docx_para_pdf, render_resume
 from .tailoring import tailor
 
 log = logging.getLogger(__name__)
@@ -138,16 +138,15 @@ class Orchestrator:
             stats["skipped"] += 1
             return
 
-        # 2) adaptação do currículo (modelo principal)
-        app = tailor(self.llm, job, self.resume, self.context)
+        # 2) adaptação do currículo
         slug = f"{job.company}-{job.title}-{job.uid[:6]}"
-        html_path, pdf_path = render_resume(app.resume_json, self.cfg.out_dir, slug)
-        resume_file = pdf_path or html_path
+        resume_file, resume_json, carta, mudancas = self._adaptar(job, slug)
         self.tracker.set_status(
             job.uid, ApplicationStatus.TAILORED,
-            resume_json=app.resume_json, cover_letter=app.cover_letter,
-            changes_summary=app.changes_summary, pdf_path=str(resume_file),
+            resume_json=resume_json, cover_letter=carta,
+            changes_summary=mudancas, pdf_path=str(resume_file),
         )
+        pdf_path = resume_file if resume_file.suffix == ".pdf" else None
         stats["tailored"] += 1
         row = self.tracker.get(job.uid)
 
@@ -171,6 +170,34 @@ class Orchestrator:
             stats["applied"] += 1
         else:
             stats["failed"] += 1
+
+    # ------------------------------------------------------------------
+    def _adaptar(self, job: Job, slug: str) -> tuple[Path, dict, str, str]:
+        """Gera o currículo da vaga. Edita o .docx do usuário quando ele existe.
+
+        Devolve (arquivo_para_enviar, resume_json, cover_letter, resumo_das_mudancas).
+        O caminho antigo (JSON Resume + template HTML) continua valendo como fallback
+        para quem não tem um .docx base configurado.
+        """
+        base = self.cfg.base_docx
+        if base:
+            try:
+                from .docx_resume import adaptar
+
+                destino = self.cfg.out_dir / f"{slug}.docx"
+                r = adaptar(job, base, destino, llm=self.llm)
+                pdf = docx_para_pdf(r.caminho, self.cfg.out_dir)
+                mudancas = r.resumo or f"{r.edicoes} trechos ajustados para a vaga."
+                if r.avisos:
+                    mudancas += f"\n\n(ressalvas: {'; '.join(r.avisos)})"
+                log.info("CV adaptado via docx por %s (%d edições)", r.editor, r.edicoes)
+                return (pdf or r.caminho), {}, "", mudancas
+            except Exception:  # noqa: BLE001
+                log.exception("Adaptação via .docx falhou; usando o template antigo")
+
+        app = tailor(self.llm, job, self.resume, self.context)
+        html_path, pdf_path = render_resume(app.resume_json, self.cfg.out_dir, slug)
+        return (pdf_path or html_path), app.resume_json, app.cover_letter, app.changes_summary
 
     # ------------------------------------------------------------------
     def _answerer(self) -> ScreeningAnswerer:

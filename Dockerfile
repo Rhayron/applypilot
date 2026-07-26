@@ -1,9 +1,12 @@
 FROM python:3.12-slim
 
-# deps de sistema: WeasyPrint (PDF) + Playwright (Chromium)
+# deps de sistema: WeasyPrint (PDF) + Playwright (Chromium) + LibreOffice.
+# O LibreOffice é o que converte o .docx adaptado em PDF preservando a formatação
+# do currículo original; só o -writer, não a suíte inteira.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
     libffi-dev shared-mime-info fonts-dejavu \
+    libreoffice-writer libreoffice-core fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

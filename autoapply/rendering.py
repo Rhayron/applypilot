@@ -12,6 +12,34 @@ log = logging.getLogger(__name__)
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def docx_para_pdf(docx_path: Path, out_dir: Path) -> Path | None:
+    """Converte o .docx em PDF pelo LibreOffice headless.
+
+    É o que preserva a formatação do currículo original: o caminho antigo
+    (HTML + WeasyPrint) redesenhava a página do zero e perdia a tipografia do
+    arquivo do usuário.
+    """
+    import subprocess
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        proc = subprocess.run(
+            ["soffice", "--headless", "--convert-to", "pdf", "--outdir",
+             str(out_dir), str(docx_path)],
+            capture_output=True, text=True, timeout=300,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        log.error("LibreOffice indisponível para converter %s: %s", docx_path.name, e)
+        return None
+
+    pdf = out_dir / f"{docx_path.stem}.pdf"
+    if pdf.exists():
+        return pdf
+    log.error("Conversão falhou (rc=%s): %s", proc.returncode,
+              (proc.stderr or proc.stdout)[:300])
+    return None
+
+
 def render_resume(resume: dict, out_dir: Path, slug: str) -> tuple[Path, Path | None]:
     """Gera <slug>.html e, se WeasyPrint estiver instalado, <slug>.pdf.
     Retorna (html_path, pdf_path|None)."""

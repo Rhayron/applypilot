@@ -4,4 +4,18 @@ services:
     env_file: .env
     volumes:
       - ./:/data          # config.yaml, profile/, out/, autoapply.db
+      # Claude Code do host, montado em vez de instalado: o binário tem 275 MB e as
+      # credenciais OAuth se renovam sozinhas, então compartilhar o diretório mantém
+      # container e host sempre com o mesmo login.
+      - /root/.local/share/claude:/opt/claude:ro
+      - /root/.claude:/root/.claude
+    environment:
+      CLAUDE_BIN: /opt/claude/versions/2.1.220
+      CLAUDE_MODEL: opus
+      CLAUDE_FALLBACK_MODEL: sonnet
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

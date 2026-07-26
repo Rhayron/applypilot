@@ -27,6 +27,9 @@ class ProfileConfig(BaseModel):
     resume_path: str = "profile/resume.json"
     context_path: str = "profile/context.md"
     answers_path: str = "profile/answers.yaml"
+    # Currículo real do usuário. Quando existe, a adaptação passa a ser uma edição
+    # pontual deste arquivo em vez da montagem de um documento novo.
+    docx_path: str = "profile/base.docx"
 
 
 class SearchConfig(BaseModel):
@@ -110,6 +113,11 @@ class Config(BaseModel):
 
     def source(self, name: str) -> dict[str, Any]:
         return self.sources.get(name, {})
+
+    @property
+    def base_docx(self) -> Optional[Path]:
+        p = self.base_dir / self.profile.docx_path
+        return p if p.exists() else None
 
     @property
     def out_dir(self) -> Path:
