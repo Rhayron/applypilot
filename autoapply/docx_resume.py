@@ -137,6 +137,7 @@ def validar(origem: Path, destino: Path) -> list[str]:
     # Travessão e clichê só contam quando a edição os INTRODUZIU. O currículo base
     # usa meia-risca nas datas ("Jan. 2025 – Atualmente"): é a formatação do usuário,
     # não marca de LLM, e reprovar por isso descartaria adaptação boa.
+    texto = _texto_completo(destino)
     antes = {p["i"]: p["texto"] for p in esboco(origem)}
     novos = [p["texto"] for p in esboco(destino) if antes.get(p["i"]) != p["texto"]]
     texto_novo = "\n".join(novos)
@@ -209,7 +210,11 @@ def _editar_com_claude(base: Path, saida: Path, vaga_txt: str) -> ResultadoAdapt
             CLAUDE_BIN, "-p", _prompt_claude(vaga_txt, alvo.name),
             "--model", CLAUDE_MODEL,
             "--fallback-model", CLAUDE_FALLBACK,
-            "--permission-mode", "acceptEdits",
+            # Editar .docx exige rodar python-docx, ou seja a ferramenta Bash — que
+            # acceptEdits não libera: o agente terminava sem tocar no arquivo. O
+            # sandbox aqui é o diretório temporário com uma cópia isolada, dentro do
+            # container, então liberar é contido.
+            "--permission-mode", "bypassPermissions",
             "--add-dir", str(trabalho),
         ]
         proc = subprocess.run(cmd, cwd=trabalho, capture_output=True, text=True,
@@ -227,6 +232,9 @@ def _editar_com_claude(base: Path, saida: Path, vaga_txt: str) -> ResultadoAdapt
         antes = {p["i"]: p["texto"] for p in esboco(base)}
         depois = {p["i"]: p["texto"] for p in esboco(alvo)}
         mudados = sum(1 for i, t in depois.items() if antes.get(i) != t)
+        if mudados == 0:
+            # Sair com sucesso sem editar nada é falha silenciosa, não adaptação.
+            raise RuntimeError("claude terminou sem alterar o documento")
 
         saida.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(alvo, saida)
